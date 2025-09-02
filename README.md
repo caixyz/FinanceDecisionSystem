@@ -1,10 +1,53 @@
 # 🏦 金融决策系统 (Finance Decision System)
 
-基于 AKShare 的智能股票分析和策略回测平台
+基于 AKShare 的智能股票分析和策略回测平台，支持K线图高低点标注功能
+
+[![GitHub](https://img.shields.io/badge/GitHub-caixyz-blue)](https://github.com/caixyz/FinanceDecisionSystem)
+[![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ## 📋 项目简介
 
 金融决策系统是一个功能完整的股票分析平台，集成了数据获取、技术分析、策略回测、可视化和Web界面等功能。系统基于AKShare数据源，提供实时和历史的股票数据分析服务。
+
+## 🎆 最新特性
+
+### 🎨 K线图高低点标注功能
+- **全局标注**: 红色标记全局最高点，绿色标记全局最低点
+- **局部标注**: 橙色标记局部高点，青色标记局部低点
+- **灵活选择**: 用户可在Web界面中选择标注模式
+- **价格显示**: 标注中包含具体价格数值
+
+### 🛠️ 技术改进
+- **多线程安全**: 解决matplotlib在Web环境下的线程安全问题
+- **中文支持**: 智能中文字体检测，支持多种字体备选
+- **错误处理**: 完善的异常处理和日志记录
+- **内存管理**: 自动垃圾回收和资源清理
+
+### 🔧 Web界面功能
+- **标注模式选择**: 
+  - 全局最高低点：标注整个时间段的绝对极值
+  - 局部最高低点：标注多个局部转折点
+  - 不标注：保持图表简洁
+- **实时切换**: 无需刷新页面即可切换标注模式
+- **响应式设计**: 适配不同屏幕尺寸
+
+### 📊 使用示例
+
+在Web界面中：
+1. 输入股票代码（如：000858）
+2. 选择分析天数（30-252天）
+3. 在"高低点标注"下拉菜单中选择标注模式
+4. 点击"生成图表"查看带标注的K线图
+
+API调用示例：
+```bash
+# 获取带全局标注的K线图
+curl "http://localhost:5000/api/stocks/000858/chart?mark_extremes=global&days=90"
+
+# 获取带局部标注的K线图  
+curl "http://localhost:5000/api/stocks/000858/chart?mark_extremes=local&days=60"
+```
 
 ## ✨ 主要功能
 
@@ -27,10 +70,12 @@
 - **组合回测**: 支持多股票组合策略测试
 
 ### 📊 数据可视化
-- **K线图表**: 专业的蜡烛图展示
+- **K线图表**: 专业的蜡烛图展示，支持高低点标注
+- **智能标注**: 全局和局部高低点自动识别与标注
 - **技术指标图**: 多指标叠加显示
 - **交互图表**: 基于Plotly的动态图表
 - **分析报告**: 自动生成HTML格式报告
+- **中文支持**: 完善的中文字体显示
 
 ### 🌐 Web界面
 - **直观界面**: 现代化的Web用户界面
@@ -48,7 +93,7 @@
 
 1. **克隆项目**
 ```bash
-git clone https://github.com/yourusername/FinanceDecisionSystem.git
+git clone https://github.com/caixyz/FinanceDecisionSystem.git
 cd FinanceDecisionSystem
 ```
 
@@ -74,7 +119,7 @@ python app.py
 
 然后在浏览器打开 `http://localhost:5000`
 
-## 📁 项目结构
+## 📝 项目结构
 
 ```
 FinanceDecisionSystem/
@@ -83,27 +128,37 @@ FinanceDecisionSystem/
 │   ├── analyzer.py        # 技术分析模块
 │   ├── backtest.py        # 回测框架
 │   ├── storage.py         # 数据存储模块
-│   └── visualization.py   # 可视化模块
+│   └── visualization.py   # 可视化模块(支持K线图标注)
 ├── strategies/             # 交易策略
-│   ├── __init__.py
 │   └── example_strategies.py
 ├── utils/                  # 工具模块
 │   ├── config.py          # 配置管理
 │   └── logger.py          # 日志管理
 ├── templates/              # Web模板
-│   └── index.html
+│   └── index.html         # 支持标注功能的主页
 ├── static/                 # 静态文件
 │   ├── charts/            # 图表文件
 │   └── reports/           # 报告文件
+├── tests/                  # 测试文件(已重新组织)
+│   ├── unit/              # 单元测试
+│   ├── integration/       # 集成测试
+│   └── performance/       # 性能测试
+├── dev_tools/              # 开发工具
+│   ├── debug_*.py         # 调试工具
+│   └── verify_*.py        # 验证工具
 ├── data/                   # 数据文件
+│   └── temp/              # 临时数据
 ├── logs/                   # 日志文件
-├── tests/                  # 测试文件
 ├── notebooks/              # Jupyter笔记本
 ├── app.py                  # Web应用入口
+├── app_safe.py             # 线程安全版本(支持标注)
 ├── demo.py                 # 演示脚本
 ├── config.yml              # 配置文件
-└── requirements.txt        # 依赖列表
+├── requirements.txt        # 依赖列表
+└── PROJECT_STRUCTURE.md    # 项目结构说明
 ```
+
+> 📝 **详细结构说明**: 查看 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) 了解完整的项目结构和组织原则
 
 ## 🛠️ 使用示例
 
@@ -149,15 +204,29 @@ strategy = MAStrategy(short_period=5, long_period=20)
 results = backtest_engine.run_backtest(strategy, stock_data, "000001")
 ```
 
-### 可视化
+### 可视化和K线图标注
 ```python
 from core.visualization import ChartPlotter
 
 # 初始化图表绘制器
 plotter = ChartPlotter()
 
-# 生成K线图
+# 生成基本K线图
 chart_path = plotter.plot_candlestick_chart(stock_data, "000001")
+
+# 生成带全局最高低点标注的K线图
+chart_path = plotter.plot_candlestick_chart(
+    stock_data, 
+    "000001",
+    mark_extremes='global'  # 全局标注
+)
+
+# 生成带局部高低点标注的K线图
+chart_path = plotter.plot_candlestick_chart(
+    stock_data, 
+    "000001",
+    mark_extremes='local'   # 局部标注
+)
 
 # 生成技术指标图
 indicators_path = plotter.plot_technical_indicators(stock_data, "000001")
@@ -169,7 +238,8 @@ indicators_path = plotter.plot_technical_indicators(stock_data, "000001")
 - `GET /api/stocks/list` - 获取股票列表
 - `GET /api/stocks/{symbol}/data` - 获取股票历史数据
 - `GET /api/stocks/{symbol}/analysis` - 分析股票
-- `GET /api/stocks/{symbol}/chart` - 生成股票图表
+- `GET /api/stocks/{symbol}/chart?mark_extremes={mode}` - 生成股票图表
+  - `mark_extremes`: 标注模式 (`global`|全局, `local`|局部, `none`|无)
 
 ### 策略回测
 - `POST /api/backtest/run` - 运行策略回测
@@ -275,8 +345,36 @@ WEB:
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 打开Pull Request
 
-## 📝 开发计划
+## 🧪 测试
 
+项目包含完整的测试套件：
+
+```bash
+# 运行所有测试
+python -m pytest tests/
+
+# 运行单元测试
+python -m pytest tests/unit/
+
+# 运行集成测试
+python -m pytest tests/integration/
+
+# 快速测试K线标注功能
+python dev_tools/quick_test.py
+
+# 验证标注功能
+python dev_tools/verify_annotations.py
+```
+
+## 📚 文档
+
+- 📝 [K线图标注功能说明](K线图标注功能说明.md)
+- 📁 [项目结构说明](PROJECT_STRUCTURE.md)
+- ⚙️ [API接口文档](#-api接口)
+- 🛠️ [配置说明](#-配置说明)## 📝 开发计划 ✅ K线图高低点标注功能
+- [x] ✅ 项目目录结构重构
+- [x] ✅ matplotlib多线程安全优化
+- [x] ✅ 中文字体智能检测
 - [ ] 增加更多技术指标
 - [ ] 支持期货、期权数据
 - [ ] 机器学习策略
@@ -290,9 +388,10 @@ WEB:
 
 ## 📞 联系方式
 
-- 项目主页: https://github.com/yourusername/FinanceDecisionSystem
-- 问题反馈: https://github.com/yourusername/FinanceDecisionSystem/issues
-- 邮箱: your.email@example.com
+- 🌐 项目主页: https://github.com/caixyz/FinanceDecisionSystem
+- 📝 问题反馈: https://github.com/caixyz/FinanceDecisionSystem/issues
+- 📧 邮箱: 3352624214@qq.com
+- 👨‍💻 作者: caixyz
 
 ## 🙏 致谢
 
