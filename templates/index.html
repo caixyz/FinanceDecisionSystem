@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金融决策系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .header h1 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 2rem 0;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-container {
+            margin-top: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .metric {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .metric-label {
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .chart-container {
+            text-align: center;
+            margin: 1rem 0;
+        }
+
+        .chart-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 10px;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🏦 金融决策系统</h1>
+            <p>基于 AKShare 的智能股票分析平台</p>
+        </div>
+    </div>
+
+    <div class="container main-content">
+        <!-- 股票分析 -->
+        <div class="card">
+            <h2>📈 股票技术分析</h2>
+            <div class="form-group">
+                <label for="stockSymbol">股票代码:</label>
+                <input type="text" id="stockSymbol" placeholder="例如: 000001" />
+            </div>
+            <div class="form-group">
+                <label for="analysisDays">分析天数:</label>
+                <select id="analysisDays">
+                    <option value="30">30天</option>
+                    <option value="60">60天</option>
+                    <option value="90" selected>90天</option>
+                    <option value="180">180天</option>
+                    <option value="252">一年</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="markExtremes">高低点标注:</label>
+                <select id="markExtremes">
+                    <option value="global" selected>全局最高低点</option>
+                    <option value="local">局部最高低点</option>
+                    <option value="none">不标注</option>
+                </select>
+            </div>
+            <button class="btn" onclick="analyzeStock()">开始分析</button>
+            <div id="analysisResult" class="result-container"></div>
+        </div>
+
+        <!-- 策略回测 -->
+        <div class="card">
+            <h2>🔄 策略回测</h2>
+            <div class="form-group">
+                <label for="backtestSymbol">股票代码:</label>
+                <input type="text" id="backtestSymbol" placeholder="例如: 000001" />
+            </div>
+            <div class="form-group">
+                <label for="strategy">交易策略:</label>
+                <select id="strategy">
+                    <option value="MA策略">MA策略</option>
+                    <option value="RSI策略">RSI策略</option>
+                    <option value="MACD策略">MACD策略</option>
+                    <option value="布林带策略">布林带策略</option>
+                    <option value="综合策略">综合策略</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="backtestDays">回测天数:</label>
+                <select id="backtestDays">
+                    <option value="90">90天</option>
+                    <option value="180">180天</option>
+                    <option value="252" selected>一年</option>
+                    <option value="504">两年</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="initialCapital">初始资金:</label>
+                <input type="number" id="initialCapital" value="1000000" step="10000" />
+            </div>
+            <button class="btn" onclick="runBacktest()">开始回测</button>
+            <div id="backtestResult" class="result-container"></div>
+        </div>
+
+        <!-- 生成报告 -->
+        <div class="card">
+            <h2>📊 生成分析报告</h2>
+            <div class="form-group">
+                <label for="reportSymbol">股票代码:</label>
+                <input type="text" id="reportSymbol" placeholder="例如: 000001" />
+            </div>
+            <div class="form-group">
+                <label for="reportDays">报告天数:</label>
+                <select id="reportDays">
+                    <option value="30">30天</option>
+                    <option value="60">60天</option>
+                    <option value="90" selected>90天</option>
+                </select>
+            </div>
+            <button class="btn" onclick="generateReport()">生成报告</button>
+            <div id="reportResult" class="result-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // API 基础URL
+        const API_BASE = '/api';
+
+        // 工具函数
+        function showLoading(containerId) {
+            document.getElementById(containerId).innerHTML = '<div class="loading">⏳ 处理中...</div>';
+        }
+
+        function showError(containerId, message) {
+            document.getElementById(containerId).innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+
+        function showSuccess(containerId, message) {
+            document.getElementById(containerId).innerHTML = `<div class="success">✅ ${message}</div>`;
+        }
+
+        // 股票技术分析
+        async function analyzeStock() {
+            const symbol = document.getElementById('stockSymbol').value.trim();
+            const days = document.getElementById('analysisDays').value;
+
+            if (!symbol) {
+                showError('analysisResult', '请输入股票代码');
+                return;
+            }
+
+            showLoading('analysisResult');
+
+            try {
+                const response = await fetch(`${API_BASE}/stocks/${symbol}/analysis?days=${days}`);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    displayAnalysisResult(result.data);
+                } else {
+                    showError('analysisResult', result.message);
+                }
+            } catch (error) {
+                showError('analysisResult', `请求失败: ${error.message}`);
+            }
+        }
+
+        function displayAnalysisResult(data) {
+            const container = document.getElementById('analysisResult');
+            
+            const signal = data.trading_signal.signal;
+            const signalText = signal === 1 ? '买入' : signal === -1 ? '卖出' : '持有';
+            const signalColor = signal === 1 ? '#28a745' : signal === -1 ? '#dc3545' : '#6c757d';
+
+            container.innerHTML = `
+                <div class="grid">
+                    <div class="metric">
+                        <div class="metric-value">${data.current_price.toFixed(2)}</div>
+                        <div class="metric-label">当前价格</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.trend}</div>
+                        <div class="metric-label">趋势判断</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" style="color: ${signalColor}">${signalText}</div>
+                        <div class="metric-label">交易信号</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.risk_assessment.risk_level}</div>
+                        <div class="metric-label">风险等级</div>
+                    </div>
+                </div>
+                
+                <h3>技术指标</h3>
+                <div class="grid">
+                    <div class="metric">
+                        <div class="metric-value">${data.technical_indicators.RSI.toFixed(2)}</div>
+                        <div class="metric-label">RSI</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.technical_indicators.MACD.toFixed(4)}</div>
+                        <div class="metric-label">MACD</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.technical_indicators.MA_5.toFixed(2)}</div>
+                        <div class="metric-label">MA5</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.technical_indicators.MA_20.toFixed(2)}</div>
+                        <div class="metric-label">MA20</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 2rem;">
+                    <button class="btn" onclick="generateCharts('${data.symbol}', ${document.getElementById('analysisDays').value})">📈 生成图表</button>
+                    <div id="chartContainer" class="chart-container" style="margin-top: 1rem;"></div>
+                </div>
+            `;
+        }
+
+        // 生成图表
+        async function generateCharts(symbol, days) {
+            const container = document.getElementById('chartContainer');
+            const markExtremes = document.getElementById('markExtremes').value;
+            container.innerHTML = '<div class="loading">⏳ 正在生成图表...</div>';
+            
+            try {
+                console.log(`开始生成图表: ${symbol}, ${days}天, 标注模式: ${markExtremes}`);
+                
+                // 生成K线图
+                console.log('请求K线图...');
+                const candlestickResponse = await fetch(`${API_BASE}/stocks/${symbol}/chart?type=candlestick&days=${days}&mark_extremes=${markExtremes}`);
+                const candlestickResult = await candlestickResponse.json();
+                console.log('K线图响应:', candlestickResult);
+                
+                // 生成技术指标图
+                console.log('请求技术指标图...');
+                const indicatorsResponse = await fetch(`${API_BASE}/stocks/${symbol}/chart?type=indicators&days=${days}`);
+                const indicatorsResult = await indicatorsResponse.json();
+                console.log('技术指标图响应:', indicatorsResult);
+                
+                if (candlestickResult.code === 200 && indicatorsResult.code === 200) {
+                    const candlestickUrl = candlestickResult.data.chart_url;
+                    const indicatorsUrl = indicatorsResult.data.chart_url;
+                    
+                    console.log('K线图 URL:', candlestickUrl);
+                    console.log('技术指标图 URL:', indicatorsUrl);
+                    
+                    // 添加时间戳防止缓存
+                    const timestamp = new Date().getTime();
+                    const candlestickFullUrl = `${candlestickUrl}?t=${timestamp}`;
+                    const indicatorsFullUrl = `${indicatorsUrl}?t=${timestamp}`;
+                    
+                    console.log('完整K线图 URL:', candlestickFullUrl);
+                    console.log('完整技术指标图 URL:', indicatorsFullUrl);
+                    
+                    container.innerHTML = `
+                        <div style="margin-bottom: 2rem;">
+                            <h4>K线图</h4>
+                            <img id="candlestickImg" src="${candlestickFullUrl}" alt="K线图" 
+                                 style="max-width: 100%; height: auto; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);"
+                                 onerror="console.error('K线图加载失败:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';"
+                                 onload="console.log('K线图加载成功:', this.src);">
+                            <div style="display: none; color: red; padding: 10px; border: 1px solid red; border-radius: 5px;">
+                                K线图加载失败，请稍后重试。<br>
+                                原始路径: ${candlestickUrl}<br>
+                                完整路径: ${candlestickFullUrl}
+                            </div>
+                        </div>
+                        <div>
+                            <h4>技术指标图</h4>
+                            <img id="indicatorsImg" src="${indicatorsFullUrl}" alt="技术指标图" 
+                                 style="max-width: 100%; height: auto; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);"
+                                 onerror="console.error('技术指标图加载失败:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';"
+                                 onload="console.log('技术指标图加载成功:', this.src);">
+                            <div style="display: none; color: red; padding: 10px; border: 1px solid red; border-radius: 5px;">
+                                技术指标图加载失败，请稍后重试。<br>
+                                原始路径: ${indicatorsUrl}<br>
+                                完整路径: ${indicatorsFullUrl}
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 添加图片加载状态检查
+                    setTimeout(() => {
+                        const candlestickImg = document.getElementById('candlestickImg');
+                        const indicatorsImg = document.getElementById('indicatorsImg');
+                        
+                        if (candlestickImg && !candlestickImg.complete) {
+                            console.warn('K线图仍在加载中...');
+                        }
+                        if (indicatorsImg && !indicatorsImg.complete) {
+                            console.warn('技术指标图仍在加载中...');
+                        }
+                    }, 3000);
+                } else {
+                    const errorMsg = candlestickResult.message || indicatorsResult.message;
+                    console.error('图表生成失败:', errorMsg);
+                    container.innerHTML = `<div class="error">⚠️ 图表生成失败: ${errorMsg}</div>`;
+                }
+            } catch (error) {
+                console.error('生成图表过程中出错:', error);
+                container.innerHTML = `<div class="error">⚠️ 图表生成失败: ${error.message}</div>`;
+            }
+        }
+
+        // 策略回测
+        async function runBacktest() {
+            const symbol = document.getElementById('backtestSymbol').value.trim();
+            const strategy = document.getElementById('strategy').value;
+            const days = document.getElementById('backtestDays').value;
+            const initialCapital = document.getElementById('initialCapital').value;
+
+            if (!symbol) {
+                showError('backtestResult', '请输入股票代码');
+                return;
+            }
+
+            showLoading('backtestResult');
+
+            try {
+                const response = await fetch(`${API_BASE}/backtest/run`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        symbol,
+                        strategy,
+                        days: parseInt(days),
+                        initial_capital: parseFloat(initialCapital)
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    displayBacktestResult(result.data);
+                } else {
+                    showError('backtestResult', result.message);
+                }
+            } catch (error) {
+                showError('backtestResult', `请求失败: ${error.message}`);
+            }
+        }
+
+        function displayBacktestResult(data) {
+            const container = document.getElementById('backtestResult');
+            
+            const totalReturnPct = (data.total_return * 100).toFixed(2);
+            const annualReturnPct = (data.annual_return * 100).toFixed(2);
+            const maxDrawdownPct = (Math.abs(data.max_drawdown) * 100).toFixed(2);
+            const winRatePct = (data.win_rate * 100).toFixed(1);
+
+            container.innerHTML = `
+                <h3>回测结果 - ${data.strategy_name}</h3>
+                <div class="grid">
+                    <div class="metric">
+                        <div class="metric-value">${data.initial_capital.toLocaleString()}</div>
+                        <div class="metric-label">初始资金</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.final_value.toLocaleString()}</div>
+                        <div class="metric-label">最终价值</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" style="color: ${data.total_return >= 0 ? '#28a745' : '#dc3545'}">${totalReturnPct}%</div>
+                        <div class="metric-label">总收益率</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${annualReturnPct}%</div>
+                        <div class="metric-label">年化收益率</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" style="color: #dc3545">${maxDrawdownPct}%</div>
+                        <div class="metric-label">最大回撤</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.sharpe_ratio.toFixed(2)}</div>
+                        <div class="metric-label">夏普比率</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${data.trade_count}</div>
+                        <div class="metric-label">交易次数</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${winRatePct}%</div>
+                        <div class="metric-label">胜率</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 生成分析报告
+        async function generateReport() {
+            const symbol = document.getElementById('reportSymbol').value.trim();
+            const days = document.getElementById('reportDays').value;
+
+            if (!symbol) {
+                showError('reportResult', '请输入股票代码');
+                return;
+            }
+
+            showLoading('reportResult');
+
+            try {
+                const response = await fetch(`${API_BASE}/reports/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        symbol,
+                        days: parseInt(days)
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    document.getElementById('reportResult').innerHTML = `
+                        <div class="success">
+                            ✅ 报告生成成功！
+                            <br><br>
+                            <a href="${result.data.report_url}" target="_blank" class="btn">📄 查看报告</a>
+                        </div>
+                    `;
+                } else {
+                    showError('reportResult', result.message);
+                }
+            } catch (error) {
+                showError('reportResult', `请求失败: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+# 数据库配置
+DATABASE:
+  type: sqlite
+  path: data/finance_data.db
+  backup_interval: 24  # 备份间隔(小时)
+
+# Redis配置
+REDIS:
+  host: localhost
+  port: 6379
+  db: 0
+  password: null
+  cache_ttl: 3600  # 缓存过期时间(秒)
+
+# 数据源配置
+DATA_SOURCE:
+  primary: akshare
+  update_interval: 300  # 数据更新间隔(秒)
+  retry_times: 3
+  timeout: 30
+
+# 股票配置
+STOCK:
+  default_period: daily
+  supported_periods: [1m, 5m, 15m, 30m, 60m, daily, weekly, monthly]
+  max_history_days: 1000
+
+# 技术分析配置
+TECHNICAL_ANALYSIS:
+  indicators:
+    - MA
+    - EMA
+    - MACD
+    - RSI
+    - BOLL
+    - KDJ
+  default_ma_periods: [5, 10, 20, 60]
+  
+# 回测配置  
+BACKTEST:
+  initial_capital: 1000000  # 初始资金
+  commission_rate: 0.0003   # 手续费率
+  slippage: 0.001          # 滑点
+  max_position: 1.0        # 最大仓位
+
+# Web服务配置
+WEB:
+  host: 0.0.0.0
+  port: 5000
+  debug: false
+  
+# 日志配置
+LOGGING:
+  level: INFO
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+  rotation: "1 day"
+  retention: "30 days"
