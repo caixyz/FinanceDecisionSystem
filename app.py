@@ -1,70 +1,378 @@
+#!/usr/bin/env python3
 """
-Web应用主入口
-基于Flask的金融分析系统API
+金融决策系统主应用
 """
-from flask import Flask, request, jsonify, render_template, send_from_directory
-from flask_cors import CORS
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_from_directory
+from functools import wraps
 import os
-from pathlib import Path
+import sys
+from datetime import datetime, timedelta
 
-from utils.config import config
-from utils.logger import logger
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from core.auth import UserManager, login_required
+from core.storage import db_manager
 from core.data_source import DataSource
 from core.analyzer import TechnicalAnalyzer
-from core.backtest import BacktestEngine, MAStrategy, RSIStrategy
-from core.visualization import ChartPlotter, ReportGenerator
-from core.storage import db_manager, cache_manager
-from strategies.example_strategies import MACDStrategy, BollingerBandsStrategy, CompositeStrategy
+from core.backtest import BacktestEngine
+from core.visualization import ChartPlotter
+from utils.logger import logger
+from utils.config import config
 
+# 导入股票数据同步管理器
+from core.stock_sync import StockDataSynchronizer
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
-CORS(app)
+# 创建Flask应用
+app = Flask(__name__)
+app.secret_key = config.get('WEB.secret_key', 'your-secret-key-change-in-production')
+
+# 初始化用户管理器
+user_manager = UserManager()
+user_manager.init_default_user()
+
+# 设置session密钥
+app.secret_key = os.urandom(16)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = False  # 开发环境设为False
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 # 全局实例
+user_manager = UserManager()
 data_source = DataSource()
 analyzer = TechnicalAnalyzer()
 backtest_engine = BacktestEngine()
-chart_plotter = ChartPlotter()
-report_generator = ReportGenerator()
+# 注释掉暂时不需要的模块
+# chart_plotter = ChartPlotter()
+# report_generator = ReportGenerator()
+
+
+def require_login(f):
+    """登录验证装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 检查session中是否有用户ID
+        if 'user_id' not in session:
+            if request.is_json:
+                return jsonify({'code': 401, 'message': '请先登录'}), 401
+            return redirect(url_for('login'))
+        
+        # 验证session token
+        session_token = session.get('session_token')
+        
+        if not session_token or not user_manager.validate_session(session_token):
+            session.clear()
+            if request.is_json:
+                return jsonify({'code': 401, 'message': '登录已过期，请重新登录'}), 401
+            return redirect(url_for('login'))
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
 
 
 @app.route('/')
 def index():
     """主页"""
+    # 检查是否登录，如果未登录则跳转到登录页面
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    # 已登录用户返回分析界面
     return render_template('index.html')
 
 
-@app.route('/api/stocks/list')
-def get_stock_list():
-    """获取股票列表"""
+@app.route('/login')
+def login():
+    """登录页面"""
+    # 如果已登录，跳转到控制台
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('login.html')
+
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """控制台主页（登录后）"""
+    return render_template('dashboard.html')
+
+
+@app.route('/test_stock_management')
+@login_required
+def test_stock_management():
+    """股票数据管理测试页面"""
+    return render_template('test_stock_management.html')
+
+
+@app.route('/debug_index')
+@login_required
+def debug_index():
+    """调试版主页"""
+    return render_template('debug_index.html')
+
+# ================================
+# 认证API接口
+# ================================
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    """API登录接口"""
     try:
-        # 先从缓存获取
-        cache_key = "stock_list"
-        stock_list = cache_manager.get(cache_key)
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
         
-        if stock_list is None:
-            df = data_source.get_stock_list()
-            stock_list = df[['代码', '名称', '最新价', '涨跌幅', '市值']].head(100).to_dict('records')
-            cache_manager.set(cache_key, stock_list, ttl=3600)  # 缓存1小时
+        if not username or not password:
+            return jsonify({
+                'code': 400,
+                'message': '用户名和密码不能为空'
+            }), 400
+        
+        # 用户认证
+        user = user_manager.authenticate_user(username, password)
+        
+        if user:
+            # 创建会话
+            session_token = user_manager.create_session(user['id'])
+            
+            if session_token:
+                # 设置session
+                session['user_id'] = user['id']
+                session['session_token'] = session_token
+                
+                return jsonify({
+                    'code': 200,
+                    'message': '登录成功',
+                    'data': {
+                        'user': {
+                            'id': user['id'],
+                            'username': user['username'],
+                            'real_name': user['real_name'],
+                            'role': user['role']
+                        }
+                    }
+                })
+            else:
+                return jsonify({
+                    'code': 500,
+                    'message': '创建会话失败'
+                }), 500
+        else:
+            return jsonify({
+                'code': 401,
+                'message': '用户名或密码错误'
+            }), 401
+            
+    except Exception as e:
+        logger.error(f"登录失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'登录失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+@login_required
+def api_logout():
+    """退出登录API"""
+    try:
+        # 撤销会话
+        session_token = session.get('session_token')
+        if session_token:
+            user_manager.revoke_session(session_token)
+        
+        # 清除session
+        username = session.get('username', '未知用户')
+        session.clear()
+        
+        logger.info(f"用户退出登录: {username}")
         
         return jsonify({
             'code': 200,
-            'message': '获取成功',
-            'data': stock_list
+            'message': '退出成功'
         })
         
     except Exception as e:
-        logger.error(f"获取股票列表失败: {e}")
+        logger.error(f"退出登录失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'退出失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/auth/check')
+def api_check_auth():
+    """检查登录状态API"""
+    try:
+        if 'user_id' not in session:
+            return jsonify({
+                'code': 401,
+                'message': '未登录'
+            }), 401
+        
+        # 验证session
+        session_token = session.get('session_token')
+        user_id = user_manager.validate_session(session_token)
+        
+        if not user_id or user_id != session.get('user_id'):
+            session.clear()
+            return jsonify({
+                'code': 401,
+                'message': '登录已过期'
+            }), 401
+        
+        # 获取用户信息
+        user = user_manager.get_user_by_id(user_id)
+        
+        if user:
+            return jsonify({
+                'code': 200,
+                'message': '已登录',
+                'data': {
+                    'user': user
+                }
+            })
+        else:
+            session.clear()
+            return jsonify({
+                'code': 401,
+                'message': '用户不存在'
+            }), 401
+            
+    except Exception as e:
+        logger.error(f"检查登录状态失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'检查失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/auth/user')
+@login_required
+def api_get_user():
+    """获取当前用户信息API"""
+    try:
+        user_id = session.get('user_id')
+        user = user_manager.get_user_by_id(user_id)
+        
+        if user:
+            return jsonify({
+                'code': 200,
+                'message': '获取成功',
+                'data': user
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': '用户不存在'
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"获取用户信息失败: {e}")
         return jsonify({
             'code': 500,
             'message': f'获取失败: {str(e)}'
         }), 500
 
 
+# ================================
+# 用户统计信息API
+# ================================
+
+@app.route('/api/user/statistics')
+@login_required
+def api_user_statistics():
+    """获取用户统计信息"""
+    try:
+        # 这里可以根据实际需要从数据库获取统计信息
+        # 目前返回模拟数据
+        stats = {
+            'total_analysis': 0,
+            'total_backtest': 0,
+            'total_reports': 0,
+            'success_rate': 0
+        }
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取成功',
+            'data': stats
+        })
+        
+    except Exception as e:
+        logger.error(f"获取用户统计信息失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/user/activities')
+@login_required
+def api_user_activities():
+    """获取用户最近活动"""
+    try:
+        # 返回模拟活动数据
+        activities = [
+            {
+                'type': 'login',
+                'title': f'用户{session.get("username", "")}登录系统',
+                'created_at': datetime.now().isoformat()
+            }
+        ]
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取成功',
+            'data': activities
+        })
+        
+    except Exception as e:
+        logger.error(f"获取用户活动失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
+
+
+# ================================
+# 股票数据API（需要登录）
+# ================================
+
+
+@app.route('/api/stocks/list')
+@login_required
+def get_stock_list():
+    """获取股票列表（支持搜索）"""
+    try:
+        # 获取查询参数
+        keyword = request.args.get('keyword', '')
+        limit = request.args.get('limit', 100, type=int)
+        
+        # 创建同步管理器
+        synchronizer = StockDataSynchronizer()
+        
+        # 搜索股票
+        stocks = synchronizer.search_stocks(keyword=keyword, limit=limit)
+        
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'stocks': stocks,
+                'total': len(stocks)
+            }
+        })
+    except Exception as e:
+        logger.error(f"获取股票列表失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取股票列表失败: {str(e)}'
+        }), 500
+
+
 @app.route('/api/stocks/<symbol>/data')
+@login_required
 def get_stock_data(symbol):
     """获取股票历史数据"""
     try:
@@ -95,6 +403,7 @@ def get_stock_data(symbol):
 
 
 @app.route('/api/stocks/<symbol>/analysis')
+@login_required
 def analyze_stock(symbol):
     """分析股票"""
     try:
@@ -126,6 +435,7 @@ def analyze_stock(symbol):
 
 
 @app.route('/api/stocks/<symbol>/chart')
+@login_required
 def get_stock_chart(symbol):
     """生成股票图表"""
     try:
@@ -172,6 +482,7 @@ def get_stock_chart(symbol):
 
 
 @app.route('/api/backtest/run', methods=['POST'])
+@login_required
 def run_backtest():
     """运行回测"""
     try:
@@ -363,6 +674,100 @@ def get_market_sentiment():
         }), 500
 
 
+# ================================
+# 数据同步API（需要登录）
+# ================================
+
+@app.route('/api/stocks/sync/list', methods=['POST'])
+@login_required
+def sync_stock_list():
+    """同步股票列表"""
+    try:
+        # 创建同步管理器
+        synchronizer = StockDataSynchronizer()
+        
+        # 同步股票列表
+        count = synchronizer.sync_stock_list()
+        
+        return jsonify({
+            'code': 200,
+            'message': '股票列表同步成功',
+            'data': {
+                'synced_count': count
+            }
+        })
+    except Exception as e:
+        logger.error(f"同步股票列表失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'同步股票列表失败: {str(e)}'
+        }), 500
+
+@app.route('/api/stocks/sync/history', methods=['POST'])
+@login_required
+def sync_stock_history():
+    """同步股票历史数据"""
+    try:
+        # 获取请求参数
+        days = request.json.get('days', 365)
+        batch_size = request.json.get('batch_size', 50)
+        delay = request.json.get('delay', 1.0)
+        
+        # 创建同步管理器
+        synchronizer = StockDataSynchronizer()
+        
+        # 同步历史数据
+        result = synchronizer.sync_all_stock_daily_data(
+            days=days, 
+            batch_size=batch_size, 
+            delay=delay
+        )
+        
+        return jsonify({
+            'code': 200,
+            'message': '股票历史数据同步成功',
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"同步股票历史数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'同步股票历史数据失败: {str(e)}'
+        }), 500
+
+@app.route('/api/stocks/sync/latest', methods=['POST'])
+@login_required
+def sync_stock_latest():
+    """同步最新股票数据"""
+    try:
+        # 获取请求参数
+        days = request.json.get('days', 30)
+        batch_size = request.json.get('batch_size', 50)
+        delay = request.json.get('delay', 1.0)
+        
+        # 创建同步管理器
+        synchronizer = StockDataSynchronizer()
+        
+        # 同步最新数据
+        result = synchronizer.sync_latest_stock_data(
+            days=days, 
+            batch_size=batch_size, 
+            delay=delay
+        )
+        
+        return jsonify({
+            'code': 200,
+            'message': '最新股票数据同步成功',
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"同步最新股票数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'同步最新股票数据失败: {str(e)}'
+        }), 500
+
+
 # 静态文件服务
 @app.route('/static/<path:filename>')
 def serve_static(filename):
@@ -391,6 +796,10 @@ if __name__ == '__main__':
     os.makedirs('static/charts', exist_ok=True)
     os.makedirs('static/reports', exist_ok=True)
     
+    # 初始化用户数据
+    logger.info("初始化用户系统...")
+    user_manager.init_default_user()
+    
     # 获取配置
     web_config = config.get_web_config()
     host = web_config.get('host', '0.0.0.0')
@@ -398,4 +807,8 @@ if __name__ == '__main__':
     debug = web_config.get('debug', True)
     
     logger.info(f"启动Web服务: http://{host}:{port}")
+    logger.info("默认用户账号:")
+    logger.info("  管理员: admin / admin123")
+    logger.info("  演示用户: demo / demo123")
+    
     app.run(host=host, port=port, debug=debug)

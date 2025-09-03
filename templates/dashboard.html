@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>控制台 - 金融决策系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+        }
+
+        /* 导航栏样式 */
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.8rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .nav-user {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-avatar {
+            width: 35px;
+            height: 35px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 主要内容区域 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .main-content {
+            padding: 2rem 0;
+        }
+
+        /* 欢迎信息 */
+        .welcome-section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .welcome-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .welcome-title {
+            color: #333;
+            font-size: 1.8rem;
+        }
+
+        .current-time {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* 功能卡片 */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+
+        .feature-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-right: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .feature-title {
+            color: #333;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .feature-description {
+            color: #666;
+            line-height: 1.5;
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* 最近活动 */
+        .recent-activity {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .activity-header {
+            color: #333;
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            background: #f8f9fa;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .activity-time {
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 10px;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-container {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .nav-menu {
+                order: -1;
+            }
+            
+            .welcome-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🏦 金融决策系统</div>
+            
+            <div class="nav-menu">
+                <a href="/dashboard" class="nav-link">控制台</a>
+                <a href="#" class="nav-link" onclick="showAnalysisModal()">股票分析</a>
+                <a href="#" class="nav-link" onclick="showBacktestModal()">策略回测</a>
+                <a href="#" class="nav-link" onclick="showReportModal()">生成报告</a>
+            </div>
+            
+            <div class="nav-user">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">👤</div>
+                    <span id="userName">用户</span>
+                </div>
+                <button class="logout-btn" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="container main-content">
+        <!-- 欢迎信息 -->
+        <div class="welcome-section">
+            <div class="welcome-header">
+                <h1 class="welcome-title">欢迎回来，<span id="welcomeUserName">用户</span>！</h1>
+                <div class="current-time" id="currentTime"></div>
+            </div>
+            <p>您的金融分析助手已准备就绪，开始探索股票市场的投资机会吧！</p>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalAnalysis">-</div>
+                <div class="stat-label">分析次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalBacktest">-</div>
+                <div class="stat-label">回测次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalReports">-</div>
+                <div class="stat-label">生成报告</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="successRate">-</div>
+                <div class="stat-label">成功率</div>
+            </div>
+        </div>
+
+        <!-- 功能模块 -->
+        <div class="features-grid">
+            <div class="feature-card" onclick="showAnalysisModal()">
+                <div class="feature-header">
+                    <div class="feature-icon">📈</div>
+                    <div class="feature-title">股票技术分析</div>
+                </div>
+                <div class="feature-description">
+                    获取实时股票数据，计算技术指标，生成买卖信号，帮助您做出明智的投资决策。
+                </div>
+            </div>
+
+            <div class="feature-card" onclick="showBacktestModal()">
+                <div class="feature-header">
+                    <div class="feature-icon">🔄</div>
+                    <div class="feature-title">策略回测</div>
+                </div>
+                <div class="feature-description">
+                    使用历史数据测试您的交易策略，评估策略表现，优化投资组合。
+                </div>
+            </div>
+
+            <div class="feature-card" onclick="showReportModal()">
+                <div class="feature-header">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">分析报告</div>
+                </div>
+                <div class="feature-description">
+                    生成专业的股票分析报告，包含图表、指标和投资建议。
+                </div>
+            </div>
+
+            <div class="feature-card" onclick="window.location.href='/'"">
+                <div class="feature-header">
+                    <div class="feature-icon">🛠️</div>
+                    <div class="feature-title">高级分析</div>
+                </div>
+                <div class="feature-description">
+                    访问完整的分析工具界面，进行深入的技术分析和数据探索。
+                </div>
+            </div>
+
+            <!-- 新增的股票数据管理卡片 -->
+            <div class="feature-card" onclick="window.location.href='/test_stock_management'">
+                <div class="feature-header">
+                    <div class="feature-icon">💾</div>
+                    <div class="feature-title">股票数据</div>
+                </div>
+                <div class="feature-description">
+                    管理股票基础信息和历史数据，支持搜索和同步最新数据。
+                </div>
+            </div>
+        </div>
+
+        <!-- 最近活动 -->
+        <div class="recent-activity">
+            <h3 class="activity-header">📋 最近活动</h3>
+            <div id="recentActivities">
+                <div class="activity-item">
+                    <div class="activity-icon">🔍</div>
+                    <div class="activity-content">
+                        <div class="activity-title">系统初始化完成</div>
+                        <div class="activity-time">刚刚</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框容器 -->
+    <div id="modalContainer"></div>
+
+    <script>
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            updateCurrentTime();
+            loadStatistics();
+            loadRecentActivities();
+            
+            // 每分钟更新时间
+            setInterval(updateCurrentTime, 60000);
+        });
+
+        // 加载用户信息
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/auth/user');
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const user = result.data;
+                    document.getElementById('userName').textContent = user.real_name || user.username;
+                    document.getElementById('welcomeUserName').textContent = user.real_name || user.username;
+                    
+                    // 设置用户头像（使用用户名首字母）
+                    const avatar = (user.real_name || user.username).charAt(0).toUpperCase();
+                    document.getElementById('userAvatar').textContent = avatar;
+                }
+            } catch (error) {
+                console.error('加载用户信息失败:', error);
+            }
+        }
+
+        // 更新当前时间
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                weekday: 'long'
+            });
+            document.getElementById('currentTime').textContent = timeString;
+        }
+
+        // 加载统计信息
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/user/statistics');
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const stats = result.data;
+                    document.getElementById('totalAnalysis').textContent = stats.total_analysis || 0;
+                    document.getElementById('totalBacktest').textContent = stats.total_backtest || 0;
+                    document.getElementById('totalReports').textContent = stats.total_reports || 0;
+                    document.getElementById('successRate').textContent = (stats.success_rate || 0) + '%';
+                }
+            } catch (error) {
+                console.error('加载统计信息失败:', error);
+            }
+        }
+
+        // 加载最近活动
+        async function loadRecentActivities() {
+            try {
+                const response = await fetch('/api/user/activities');
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const activities = result.data;
+                    displayActivities(activities);
+                }
+            } catch (error) {
+                console.error('加载最近活动失败:', error);
+            }
+        }
+
+        // 显示活动列表
+        function displayActivities(activities) {
+            const container = document.getElementById('recentActivities');
+            
+            if (!activities || activities.length === 0) {
+                container.innerHTML = `
+                    <div class="activity-item">
+                        <div class="activity-icon">📝</div>
+                        <div class="activity-content">
+                            <div class="activity-title">暂无活动记录</div>
+                            <div class="activity-time">开始使用系统进行分析吧！</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = activities.map(activity => `
+                <div class="activity-item">
+                    <div class="activity-icon">${getActivityIcon(activity.type)}</div>
+                    <div class="activity-content">
+                        <div class="activity-title">${activity.title}</div>
+                        <div class="activity-time">${formatTime(activity.created_at)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 获取活动图标
+        function getActivityIcon(type) {
+            const icons = {
+                'analysis': '📈',
+                'backtest': '🔄',
+                'report': '📊',
+                'login': '🔑',
+                'error': '⚠️'
+            };
+            return icons[type] || '📝';
+        }
+
+        // 格式化时间
+        function formatTime(timeString) {
+            const time = new Date(timeString);
+            const now = new Date();
+            const diff = now - time;
+            
+            if (diff < 60000) {
+                return '刚刚';
+            } else if (diff < 3600000) {
+                return Math.floor(diff / 60000) + '分钟前';
+            } else if (diff < 86400000) {
+                return Math.floor(diff / 3600000) + '小时前';
+            } else {
+                return Math.floor(diff / 86400000) + '天前';
+            }
+        }
+
+        // 显示股票分析模态框
+        function showAnalysisModal() {
+            showModal('股票技术分析', `
+                <div style="padding: 1rem;">
+                    <div class="form-group">
+                        <label for="modal-stock-symbol">股票代码:</label>
+                        <input type="text" id="modal-stock-symbol" placeholder="例如: 000001" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-analysis-days">分析天数:</label>
+                        <select id="modal-analysis-days" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="30">30天</option>
+                            <option value="60">60天</option>
+                            <option value="90" selected>90天</option>
+                            <option value="180">180天</option>
+                        </select>
+                    </div>
+                    <button onclick="executeAnalysis()" style="width: 100%; padding: 0.75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 5px; cursor: pointer;">开始分析</button>
+                    <div id="modal-analysis-result" style="margin-top: 1rem;"></div>
+                </div>
+            `);
+        }
+
+        // 显示回测模态框
+        function showBacktestModal() {
+            showModal('策略回测', `
+                <div style="padding: 1rem;">
+                    <div class="form-group">
+                        <label for="modal-backtest-symbol">股票代码:</label>
+                        <input type="text" id="modal-backtest-symbol" placeholder="例如: 000001" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-strategy">策略:</label>
+                        <select id="modal-strategy" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="MA策略">MA策略</option>
+                            <option value="RSI策略">RSI策略</option>
+                            <option value="MACD策略">MACD策略</option>
+                        </select>
+                    </div>
+                    <button onclick="executeBacktest()" style="width: 100%; padding: 0.75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 5px; cursor: pointer;">开始回测</button>
+                    <div id="modal-backtest-result" style="margin-top: 1rem;"></div>
+                </div>
+            `);
+        }
+
+        // 显示报告模态框
+        function showReportModal() {
+            showModal('生成分析报告', `
+                <div style="padding: 1rem;">
+                    <div class="form-group">
+                        <label for="modal-report-symbol">股票代码:</label>
+                        <input type="text" id="modal-report-symbol" placeholder="例如: 000001" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-report-days">报告天数:</label>
+                        <select id="modal-report-days" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="30">30天</option>
+                            <option value="60">60天</option>
+                            <option value="90" selected>90天</option>
+                        </select>
+                    </div>
+                    <button onclick="executeReport()" style="width: 100%; padding: 0.75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 5px; cursor: pointer;">生成报告</button>
+                    <div id="modal-report-result" style="margin-top: 1rem;"></div>
+                </div>
+            `);
+        }
+
+        // 通用模态框显示函数
+        function showModal(title, content) {
+            const modalHtml = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;" onclick="closeModal(event)">
+                    <div style="background: white; border-radius: 10px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;" onclick="event.stopPropagation()">
+                        <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0;">${title}</h3>
+                            <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+                        </div>
+                        ${content}
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modalHtml;
+        }
+
+        // 关闭模态框
+        function closeModal(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('modalContainer').innerHTML = '';
+            }
+        }
+
+        // 执行分析
+        async function executeAnalysis() {
+            const symbol = document.getElementById('modal-stock-symbol').value.trim();
+            const days = document.getElementById('modal-analysis-days').value;
+            const resultDiv = document.getElementById('modal-analysis-result');
+            
+            if (!symbol) {
+                resultDiv.innerHTML = '<div style="color: red;">请输入股票代码</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div style="text-align: center; color: #666;">⏳ 分析中...</div>';
+            
+            try {
+                const response = await fetch(`/api/stocks/${symbol}/analysis?days=${days}`);
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    resultDiv.innerHTML = '<div style="color: green;">✅ 分析完成！查看详细结果请访问<a href="/" target="_blank">完整分析界面</a></div>';
+                } else {
+                    resultDiv.innerHTML = `<div style="color: red;">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: red;">❌ 分析失败: ${error.message}</div>`;
+            }
+        }
+
+        // 执行回测
+        async function executeBacktest() {
+            const symbol = document.getElementById('modal-backtest-symbol').value.trim();
+            const strategy = document.getElementById('modal-strategy').value;
+            const resultDiv = document.getElementById('modal-backtest-result');
+            
+            if (!symbol) {
+                resultDiv.innerHTML = '<div style="color: red;">请输入股票代码</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div style="text-align: center; color: #666;">⏳ 回测中...</div>';
+            
+            try {
+                const response = await fetch('/api/backtest/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol, strategy, days: 252 })
+                });
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const data = result.data;
+                    resultDiv.innerHTML = `
+                        <div style="color: green;">✅ 回测完成！</div>
+                        <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                            收益率: ${(data.total_return * 100).toFixed(2)}%<br>
+                            最大回撤: ${(Math.abs(data.max_drawdown) * 100).toFixed(2)}%
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div style="color: red;">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: red;">❌ 回测失败: ${error.message}</div>`;
+            }
+        }
+
+        // 执行报告生成
+        async function executeReport() {
+            const symbol = document.getElementById('modal-report-symbol').value.trim();
+            const days = document.getElementById('modal-report-days').value;
+            const resultDiv = document.getElementById('modal-report-result');
+            
+            if (!symbol) {
+                resultDiv.innerHTML = '<div style="color: red;">请输入股票代码</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div style="text-align: center; color: #666;">⏳ 生成中...</div>';
+            
+            try {
+                const response = await fetch('/api/reports/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol, days: parseInt(days) })
+                });
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    resultDiv.innerHTML = `
+                        <div style="color: green;">✅ 报告生成成功！</div>
+                        <div style="margin-top: 0.5rem;">
+                            <a href="${result.data.report_url}" target="_blank" style="color: #667eea; text-decoration: none;">📄 查看报告</a>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div style="color: red;">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: red;">❌ 生成失败: ${error.message}</div>`;
+            }
+        }
+
+        // 退出登录
+        async function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                try {
+                    const response = await fetch('/api/auth/logout', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.code === 200) {
+                        window.location.href = '/login';
+                    } else {
+                        alert('退出登录失败');
+                    }
+                } catch (error) {
+                    console.error('退出登录失败:', error);
+                    // 即使请求失败，也直接跳转到登录页
+                    window.location.href = '/login';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

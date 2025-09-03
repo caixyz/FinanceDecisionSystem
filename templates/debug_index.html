@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金融决策系统 - 调试版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .header h1 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 2rem 0;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .result-container {
+            margin-top: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .metric {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🏦 金融决策系统</h1>
+            <p>基于 AKShare 的智能股票分析平台</p>
+        </div>
+    </div>
+
+    <div class="container main-content">
+        <!-- 股票分析 -->
+        <div class="card">
+            <h2>📈 股票技术分析</h2>
+            <div class="form-group">
+                <label for="stockSymbol">股票代码:</label>
+                <input type="text" id="stockSymbol" placeholder="例如: 000001" />
+            </div>
+            <div class="form-group">
+                <label for="analysisDays">分析天数:</label>
+                <select id="analysisDays">
+                    <option value="30">30天</option>
+                    <option value="60">60天</option>
+                    <option value="90" selected>90天</option>
+                    <option value="180">180天</option>
+                    <option value="252">一年</option>
+                </select>
+            </div>
+            <button class="btn" onclick="analyzeStock()">开始分析</button>
+            <div id="analysisResult" class="result-container"></div>
+        </div>
+
+        <!-- 策略回测 -->
+        <div class="card">
+            <h2>🔄 策略回测</h2>
+            <div class="form-group">
+                <label for="backtestSymbol">股票代码:</label>
+                <input type="text" id="backtestSymbol" placeholder="例如: 000001" />
+            </div>
+            <div class="form-group">
+                <label for="strategy">交易策略:</label>
+                <select id="strategy">
+                    <option value="MA策略">MA策略</option>
+                    <option value="RSI策略">RSI策略</option>
+                    <option value="MACD策略">MACD策略</option>
+                    <option value="布林带策略">布林带策略</option>
+                    <option value="综合策略">综合策略</option>
+                </select>
+            </div>
+            <button class="btn" onclick="runBacktest()">开始回测</button>
+            <div id="backtestResult" class="result-container"></div>
+        </div>
+
+        <!-- 生成报告 -->
+        <div class="card">
+            <h2>📊 生成分析报告</h2>
+            <div class="form-group">
+                <label for="reportSymbol">股票代码:</label>
+                <input type="text" id="reportSymbol" placeholder="例如: 000001" />
+            </div>
+            <button class="btn" onclick="generateReport()">生成报告</button>
+            <div id="reportResult" class="result-container"></div>
+        </div>
+
+        <!-- 股票数据管理 -->
+        <div class="card" id="stockManagementCard">
+            <h2>💾 股票数据管理</h2>
+            <div class="form-group">
+                <label for="searchKeyword">搜索股票:</label>
+                <input type="text" id="searchKeyword" placeholder="输入股票代码或名称" />
+                <button class="btn" onclick="searchStocks()" style="margin-top: 10px;">搜索</button>
+            </div>
+            <div id="searchResult" class="result-container"></div>
+            
+            <div style="margin-top: 2rem;">
+                <h3>数据同步</h3>
+                <button class="btn" onclick="syncStockList()" style="margin-right: 10px;">🔄 同步股票列表</button>
+                <button class="btn" onclick="syncStockHistory()" style="margin-right: 10px;">📚 同步历史数据</button>
+                <button class="btn" onclick="syncStockLatest()">⚡ 同步最新数据</button>
+            </div>
+            <div id="syncResult" class="result-container"></div>
+        </div>
+        
+        <!-- 调试信息 -->
+        <div class="card">
+            <h2>🔧 调试信息</h2>
+            <div id="debugInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后显示调试信息
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查股票数据管理卡片是否存在
+            const stockManagementCard = document.getElementById('stockManagementCard');
+            const debugInfo = document.getElementById('debugInfo');
+            
+            if (stockManagementCard) {
+                debugInfo.innerHTML = '<div style="color: green;">✅ 股票数据管理区域已找到</div>';
+            } else {
+                debugInfo.innerHTML = '<div style="color: red;">❌ 未找到股票数据管理区域</div>';
+            }
+            
+            // 显示页面上所有卡片的数量
+            const cards = document.querySelectorAll('.card');
+            debugInfo.innerHTML += `<div>📊 页面上共有 ${cards.length} 个功能卡片</div>`;
+            
+            // 列出所有卡片的标题
+            cards.forEach((card, index) => {
+                const title = card.querySelector('h2');
+                if (title) {
+                    debugInfo.innerHTML += `<div>📋 卡片 ${index + 1}: ${title.textContent}</div>`;
+                }
+            });
+        });
+
+        // API 基础URL
+        const API_BASE = '/api';
+
+        // 工具函数
+        function showLoading(containerId) {
+            document.getElementById(containerId).innerHTML = '<div class="loading">⏳ 处理中...</div>';
+        }
+
+        function showError(containerId, message) {
+            document.getElementById(containerId).innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+
+        function showSuccess(containerId, message) {
+            document.getElementById(containerId).innerHTML = `<div class="success">✅ ${message}</div>`;
+        }
+
+        // 股票搜索功能
+        async function searchStocks() {
+            const keyword = document.getElementById('searchKeyword').value.trim();
+            
+            if (!keyword) {
+                showError('searchResult', '请输入搜索关键词');
+                return;
+            }
+            
+            showLoading('searchResult');
+            
+            try {
+                const response = await fetch(`${API_BASE}/stocks/list?keyword=${encodeURIComponent(keyword)}&limit=20`);
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    displaySearchResults(result.data.stocks);
+                } else {
+                    showError('searchResult', result.message);
+                }
+            } catch (error) {
+                showError('searchResult', `搜索失败: ${error.message}`);
+            }
+        }
+        
+        function displaySearchResults(stocks) {
+            const container = document.getElementById('searchResult');
+            
+            if (stocks.length === 0) {
+                container.innerHTML = '<div class="error">未找到匹配的股票</div>';
+                return;
+            }
+            
+            let html = '<div class="grid">';
+            stocks.forEach(stock => {
+                html += `
+                    <div class="metric" style="text-align: left;">
+                        <div style="font-weight: bold; font-size: 1.2rem;">${stock.symbol}</div>
+                        <div style="font-size: 1rem; margin: 5px 0;">${stock.name}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+
+        // 数据同步功能
+        async function syncStockList() {
+            if (!confirm('确定要同步股票列表吗？这将更新所有股票的基本信息。')) {
+                return;
+            }
+            
+            showLoading('syncResult');
+            
+            try {
+                const response = await fetch(`${API_BASE}/stocks/sync/list`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    showSuccess('syncResult', `股票列表同步成功，共同步 ${result.data.synced_count} 只股票`);
+                } else {
+                    showError('syncResult', result.message);
+                }
+            } catch (error) {
+                showError('syncResult', `同步失败: ${error.message}`);
+            }
+        }
+        
+        async function syncStockHistory() {
+            if (!confirm('确定要同步所有股票的历史数据吗？这可能需要较长时间。')) {
+                return;
+            }
+            
+            showLoading('syncResult');
+            
+            try {
+                const response = await fetch(`${API_BASE}/stocks/sync/history`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        days: 365,
+                        batch_size: 20,
+                        delay: 0.5
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    showSuccess('syncResult', 
+                        `历史数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
+                } else {
+                    showError('syncResult', result.message);
+                }
+            } catch (error) {
+                showError('syncResult', `同步失败: ${error.message}`);
+            }
+        }
+        
+        async function syncStockLatest() {
+            showLoading('syncResult');
+            
+            try {
+                const response = await fetch(`${API_BASE}/stocks/sync/latest`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        days: 30,
+                        batch_size: 20,
+                        delay: 0.5
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    showSuccess('syncResult', 
+                        `最新数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
+                } else {
+                    showError('syncResult', result.message);
+                }
+            } catch (error) {
+                showError('syncResult', `同步失败: ${error.message}`);
+            }
+        }
+
+        // 其他功能函数（简化版本）
+        async function analyzeStock() {
+            showError('analysisResult', '此功能在调试版本中不可用');
+        }
+        
+        async function runBacktest() {
+            showError('backtestResult', '此功能在调试版本中不可用');
+        }
+        
+        async function generateReport() {
+            showError('reportResult', '此功能在调试版本中不可用');
+        }
+    </script>
+</body>
+</html>
