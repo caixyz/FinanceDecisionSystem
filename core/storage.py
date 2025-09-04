@@ -37,6 +37,7 @@ class DatabaseManager:
                     market_cap REAL,
                     pe_ratio REAL,
                     pb_ratio REAL,
+                    close REAL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -209,15 +210,16 @@ class DatabaseManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute('''
-                    REPLACE INTO stock_info (symbol, name, industry, market_cap, pe_ratio, pb_ratio)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    REPLACE INTO stock_info (symbol, name, industry, market_cap, pe_ratio, pb_ratio, close)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     info.get('股票简称', ''),
                     info.get('所属行业', ''),
                     info.get('总市值', 0),
                     info.get('市盈率-动态', 0),
-                    info.get('市净率', 0)
+                    info.get('市净率', 0),
+                    info.get('收盘价', 0)
                 ))
                 
             logger.info(f"成功保存股票 {symbol} 基础信息")
@@ -311,6 +313,32 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"保存回测结果失败: {e}")
             raise
+    
+    def get_stock_list(self) -> List[Dict[str, Any]]:
+        """获取股票列表"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('''
+                    SELECT symbol, name, industry, market_cap, pe_ratio, pb_ratio, close, updated_at
+                    FROM stock_info
+                    ORDER BY symbol
+                ''')
+                
+                stocks = []
+                for row in cursor.fetchall():
+                    stock = dict(row)
+                    # 处理可能的None值
+                    for key in ['market_cap', 'pe_ratio', 'pb_ratio', 'close']:
+                        if stock[key] is None:
+                            stock[key] = 0.0
+                    stocks.append(stock)
+                
+                return stocks
+                
+        except Exception as e:
+            logger.error(f"获取股票列表失败: {e}")
+            return []
 
 
 class CacheManager:
@@ -430,3 +458,7 @@ class CacheManager:
 # 全局实例
 db_manager = DatabaseManager()
 cache_manager = CacheManager()
+
+
+
+

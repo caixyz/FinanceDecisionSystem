@@ -343,30 +343,22 @@ def api_user_activities():
 @app.route('/api/stocks/list')
 @login_required
 def get_stock_list():
-    """获取股票列表（支持搜索）"""
+    """获取股票列表"""
     try:
-        # 获取查询参数
-        keyword = request.args.get('keyword', '')
-        limit = request.args.get('limit', 100, type=int)
-        
-        # 创建同步管理器
-        synchronizer = StockDataSynchronizer()
-        
-        # 搜索股票
-        stocks = synchronizer.search_stocks(keyword=keyword, limit=limit)
+        # 从数据库获取股票列表
+        from core.storage import DatabaseManager
+        db = DatabaseManager()
+        stocks = db.get_stock_list()
         
         return jsonify({
-            'code': 200,
-            'message': 'success',
-            'data': {
-                'stocks': stocks,
-                'total': len(stocks)
-            }
+            'success': True,
+            'data': stocks,
+            'message': '获取股票列表成功'
         })
     except Exception as e:
-        logger.error(f"获取股票列表失败: {e}")
+        logging.error(f"获取股票列表失败: {e}")
         return jsonify({
-            'code': 500,
+            'success': False,
             'message': f'获取股票列表失败: {str(e)}'
         }), 500
 
@@ -377,16 +369,34 @@ def get_stock_data(symbol):
     """获取股票历史数据"""
     try:
         days = request.args.get('days', 90, type=int)
-        period = request.args.get('period', 'daily')
         
-        # 检查缓存
-        cache_key = f"stock_data_{symbol}_{days}_{period}"
-        stock_data = cache_manager.get(cache_key)
+        # 获取股票数据
+        from core.data_source import DataSource
+        data_source = DataSource()
+        df = data_source.get_stock_data(symbol, days=days)
         
-        if stock_data is None:
-            df = data_source.get_stock_data(symbol, period=period, days=days)
-            stock_data = df.reset_index().to_dict('records')
-            cache_manager.set(cache_key, stock_data, ttl=300)  # 缓存5分钟
+        if df.empty:
+            return jsonify({
+                'code': 404,
+                'message': '股票数据不存在'
+            }), 404
+        
+        # 处理NaN值
+        df = df.fillna(0)
+        
+        # 转换为字典格式
+        stock_data = []
+        for _, row in df.iterrows():
+            record = {
+                'date': row.name.strftime('%Y-%m-%d') if hasattr(row.name, 'strftime') else str(row.name),
+                'open': float(row.get('open', 0)),
+                'high': float(row.get('high', 0)),
+                'low': float(row.get('low', 0)),
+                'close': float(row.get('close', 0)),
+                'volume': int(row.get('volume', 0)),
+                'amount': float(row.get('amount', 0))
+            }
+            stock_data.append(record)
         
         return jsonify({
             'code': 200,
@@ -419,6 +429,19 @@ def analyze_stock(symbol):
         
         # 技术分析
         analysis = analyzer.analyze_stock(symbol, df)
+        
+        # 处理NaN值
+        def clean_nan(obj):
+            if isinstance(obj, dict):
+                return {k: clean_nan(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_nan(item) for item in obj]
+            elif isinstance(obj, float) and pd.isna(obj):
+                return 0.0
+            else:
+                return obj
+        
+        analysis = clean_nan(analysis)
         
         return jsonify({
             'code': 200,
@@ -506,6 +529,9 @@ def run_backtest():
                 'message': '股票数据不存在'
             }), 404
         
+        # 处理NaN值
+        df = df.fillna(0)
+        
         # 选择策略
         strategy_map = {
             'MA策略': MAStrategy(),
@@ -524,35 +550,47 @@ def run_backtest():
         # 保存结果
         backtest_id = backtest_engine.save_backtest_result(results)
         
-        # 准备返回数据（去除不能序列化的对象）
+        # 处理NaN值
+        def clean_nan(obj):
+            if isinstance(obj, dict):
+                return {k: clean_nan(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_nan(item) for item in obj]
+            elif isinstance(obj, float) and pd.isna(obj):
+                return 0.0
+            else:
+                return obj
+        
+        # 准备返回数据
         response_data = {
             'backtest_id': backtest_id,
             'strategy_name': results['strategy_name'],
             'symbol': results['symbol'],
             'start_date': results['start_date'],
             'end_date': results['end_date'],
-            'initial_capital': results['initial_capital'],
-            'final_value': results['final_value'],
-            'total_return': results['total_return'],
-            'annual_return': results['annual_return'],
-            'max_drawdown': results['max_drawdown'],
-            'sharpe_ratio': results['sharpe_ratio'],
-            'trade_count': results['trade_count'],
-            'win_rate': results['win_rate']
+            'initial_capital': float(results['initial_capital']),
+            'final_value': float(results['final_value']),
+            'total_return': float(results['total_return']),
+            'annual_return': float(results['annual_return']),
+            'max_drawdown': float(results['max_drawdown']),
+            'sharpe_ratio': float(results['sharpe_ratio']),
+            'trade_count': int(results['trade_count']),
+            'win_rate': float(results['win_rate'])
         }
         
-        # 处理equity_curve的序列化问题
+        # 处理equity_curve
         if 'equity_curve' in results and hasattr(results['equity_curve'], 'index'):
-            # 将Timestamp索引转换为字符串
             equity_curve = results['equity_curve']
             equity_dict = {}
             for date, value in equity_curve.items():
-                # 将Timestamp转换为字符串
                 date_str = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)
                 equity_dict[date_str] = float(value) if pd.notna(value) else 0.0
             response_data['equity_curve'] = equity_dict
         else:
             response_data['equity_curve'] = {}
+        
+        # 清理NaN值
+        response_data = clean_nan(response_data)
         
         return jsonify({
             'code': 200,

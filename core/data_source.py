@@ -161,6 +161,26 @@ class StockDataFetcher(DataFetcher):
             return result
         
         return self._retry_request(_get_data)
+    
+    def get_industry_list(self) -> pd.DataFrame:
+        """获取行业列表"""
+        def _get_data():
+            logger.bind(data_fetch=True).info("开始获取行业列表")
+            df = ak.stock_board_industry_name_em()
+            logger.bind(data_fetch=True).info(f"成功获取 {len(df)} 个行业")
+            return df
+        
+        return self._retry_request(_get_data)
+    
+    def get_industry_stocks(self, industry_name: str) -> pd.DataFrame:
+        """获取指定行业的股票列表"""
+        def _get_data():
+            logger.bind(data_fetch=True).info(f"开始获取行业 {industry_name} 的股票列表")
+            df = ak.stock_board_industry_cons_em(symbol=industry_name)
+            logger.bind(data_fetch=True).info(f"成功获取行业 {industry_name} 的 {len(df)} 只股票")
+            return df
+        
+        return self._retry_request(_get_data)
 
 
 class MarketDataFetcher(DataFetcher):

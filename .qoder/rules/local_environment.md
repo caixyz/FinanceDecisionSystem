@@ -1,7 +1,6 @@
 ---
-trigger: manual
-alwaysApply: false
-当前操作系统为:Windows
-PowerShell:true
-
+trigger: always_on
+alwaysApply: true
+osType:windowss
+PowerShell: true
 ---

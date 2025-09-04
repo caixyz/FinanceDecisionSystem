@@ -78,6 +78,20 @@
             font-size: 1rem;
         }
 
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .search-form {
+            background-color: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+
         .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -162,12 +176,124 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
+        /* 股票列表美化样式 */
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stock-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #e9ecef;
+        }
+
+        .stock-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .stock-symbol {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stock-name {
+            font-size: 1.1rem;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .stock-industry {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 0.8rem;
+            padding: 0.3rem 0.5rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .stock-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0;
+        }
+
+        .detail-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .negative-value {
+            color: #dc3545;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding: 1rem;
+        }
+
+        .page-info {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .pagination .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 0 10px;
             }
             
             .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stock-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stock-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
                 grid-template-columns: 1fr;
             }
         }
@@ -264,24 +390,7 @@
             <div id="reportResult" class="result-container"></div>
         </div>
 
-        <!-- 股票数据管理 -->
-        <div class="card">
-            <h2>💾 股票数据管理</h2>
-            <div class="form-group">
-                <label for="searchKeyword">搜索股票:</label>
-                <input type="text" id="searchKeyword" placeholder="输入股票代码或名称" />
-                <button class="btn" onclick="searchStocks()" style="margin-top: 10px;">搜索</button>
-            </div>
-            <div id="searchResult" class="result-container"></div>
-            
-            <div style="margin-top: 2rem;">
-                <h3>数据同步</h3>
-                <button class="btn" onclick="syncStockList()" style="margin-right: 10px;">🔄 同步股票列表</button>
-                <button class="btn" onclick="syncStockHistory()" style="margin-right: 10px;">📚 同步历史数据</button>
-                <button class="btn" onclick="syncStockLatest()">⚡ 同步最新数据</button>
-            </div>
-            <div id="syncResult" class="result-container"></div>
-        </div>
+
     </div>
 
     <script>
@@ -299,149 +408,6 @@
 
         function showSuccess(containerId, message) {
             document.getElementById(containerId).innerHTML = `<div class="success">✅ ${message}</div>`;
-        }
-
-        // 股票搜索功能
-        async function searchStocks() {
-            const keyword = document.getElementById('searchKeyword').value.trim();
-            
-            if (!keyword) {
-                showError('searchResult', '请输入搜索关键词');
-                return;
-            }
-            
-            showLoading('searchResult');
-            
-            try {
-                const response = await fetch(`${API_BASE}/stocks/list?keyword=${encodeURIComponent(keyword)}&limit=20`);
-                const result = await response.json();
-                
-                if (result.code === 200) {
-                    displaySearchResults(result.data.stocks);
-                } else {
-                    showError('searchResult', result.message);
-                }
-            } catch (error) {
-                showError('searchResult', `搜索失败: ${error.message}`);
-            }
-        }
-        
-        function displaySearchResults(stocks) {
-            const container = document.getElementById('searchResult');
-            
-            if (stocks.length === 0) {
-                container.innerHTML = '<div class="error">未找到匹配的股票</div>';
-                return;
-            }
-            
-            let html = '<div class="grid">';
-            stocks.forEach(stock => {
-                html += `
-                    <div class="metric" style="text-align: left;">
-                        <div style="font-weight: bold; font-size: 1.2rem;">${stock.symbol} - ${stock.name}</div>
-                        ${stock.industry ? `<div style="font-size: 0.9rem; color: #666; margin: 5px 0;">行业: ${stock.industry}</div>` : ''}
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.85rem; margin-top: 8px;">
-                            ${stock.market_cap ? `<div>总市值: ${(stock.market_cap / 100000000).toFixed(2)}亿</div>` : ''}
-                            ${stock.pe_ratio ? `<div>市盈率: ${stock.pe_ratio.toFixed(2)}</div>` : ''}
-                            ${stock.pb_ratio ? `<div>市净率: ${stock.pb_ratio.toFixed(2)}</div>` : ''}
-                            ${stock.updated_at ? `<div>更新时间: ${new Date(stock.updated_at).toLocaleDateString('zh-CN')}</div>` : ''}
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            
-            container.innerHTML = html;
-        }
-
-        // 数据同步功能
-        async function syncStockList() {
-            if (!confirm('确定要同步股票列表吗？这将更新所有股票的基本信息。')) {
-                return;
-            }
-            
-            showLoading('syncResult');
-            
-            try {
-                const response = await fetch(`${API_BASE}/stocks/sync/list`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const result = await response.json();
-                
-                if (result.code === 200) {
-                    showSuccess('syncResult', `股票列表同步成功，共同步 ${result.data.synced_count} 只股票`);
-                } else {
-                    showError('syncResult', result.message);
-                }
-            } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
-            }
-        }
-        
-        async function syncStockHistory() {
-            if (!confirm('确定要同步所有股票的历史数据吗？这可能需要较长时间。')) {
-                return;
-            }
-            
-            showLoading('syncResult');
-            
-            try {
-                const response = await fetch(`${API_BASE}/stocks/sync/history`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        days: 365,
-                        batch_size: 20,
-                        delay: 0.5
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.code === 200) {
-                    showSuccess('syncResult', 
-                        `历史数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
-                } else {
-                    showError('syncResult', result.message);
-                }
-            } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
-            }
-        }
-        
-        async function syncStockLatest() {
-            showLoading('syncResult');
-            
-            try {
-                const response = await fetch(`${API_BASE}/stocks/sync/latest`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        days: 30,
-                        batch_size: 20,
-                        delay: 0.5
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.code === 200) {
-                    showSuccess('syncResult', 
-                        `最新数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
-                } else {
-                    showError('syncResult', result.message);
-                }
-            } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
-            }
         }
 
         // 股票技术分析
