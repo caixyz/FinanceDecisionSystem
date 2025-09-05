@@ -806,6 +806,40 @@ def sync_stock_latest():
         }), 500
 
 
+# ================================
+# 行业列表API（需要登录）
+# ================================
+
+@app.route('/api/industries')
+@login_required
+def get_industries():
+    """获取股票行业列表"""
+    try:
+        import sqlite3
+        with sqlite3.connect('data/finance_data.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('''
+                SELECT DISTINCT industry 
+                FROM stock_info 
+                WHERE industry IS NOT NULL AND industry != ''
+                ORDER BY industry
+            ''')
+            
+            industries = [row['industry'] for row in cursor.fetchall()]
+            
+        return jsonify({
+            'success': True,
+            'data': industries,
+            'message': '获取行业列表成功'
+        })
+    except Exception as e:
+        logger.error(f"获取行业列表失败: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'获取行业列表失败: {str(e)}'
+        }), 500
+
+
 # 静态文件服务
 @app.route('/static/<path:filename>')
 def serve_static(filename):

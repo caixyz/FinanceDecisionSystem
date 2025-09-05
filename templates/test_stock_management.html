@@ -314,7 +314,9 @@
                     </div>
                     <div class="form-group">
                         <label for="searchIndustry">行业:</label>
-                        <input type="text" id="searchIndustry" placeholder="输入行业名称" />
+                        <select id="searchIndustry">
+                            <option value="">全部行业</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-row">
@@ -423,28 +425,62 @@
 
         // 页面加载完成后自动加载股票数据
         document.addEventListener('DOMContentLoaded', function() {
+            // 加载行业列表
+            loadIndustries();
             // 页面初始化时加载20条股票数据
             loadInitialStocks();
         });
+        
+        // 加载行业列表
+        async function loadIndustries() {
+            try {
+                const response = await fetch(`${API_BASE}/industries`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const select = document.getElementById('searchIndustry');
+                    const industries = result.data;
+                    
+                    // 清空现有选项（保留"全部行业"）
+                    select.innerHTML = '<option value="">全部行业</option>';
+                    
+                    // 添加行业选项
+                    industries.forEach(industry => {
+                        const option = document.createElement('option');
+                        option.value = industry;
+                        option.textContent = industry;
+                        select.appendChild(option);
+                    });
+                    
+                    console.log('成功加载', industries.length, '个行业');
+                } else {
+                    console.error('获取行业列表失败:', result.message);
+                }
+            } catch (error) {
+                console.error('加载行业列表失败:', error.message);
+            }
+        }
 
         // 初始化加载股票数据
         async function loadInitialStocks() {
             showLoading('searchResult');
             
-            // 构建查询参数，默认加载20条数据
-            const params = new URLSearchParams();
-            params.append('sort_by', 'symbol');
-            params.append('sort_order', 'ASC');
-            params.append('page', 1);
-            params.append('page_size', 20);
-            
             try {
-                const response = await fetch(`${API_BASE}/stocks/list?${params.toString()}`);
+                const response = await fetch(`${API_BASE}/stocks/list`);
                 const result = await response.json();
                 
-                if (result.code === 200) {
-                    displaySearchResults(result.data);
-                    console.log('初始化加载股票数据完成，共加载', result.data.stocks.length, '条记录');
+                if (result.success) {
+                    // 适配实际API格式：data直接是股票数组
+                    const stocks = result.data.slice(0, 20); // 取前20条
+                    displaySearchResults({
+                        stocks: stocks,
+                        pagination: {
+                            current_page: 1,
+                            total_pages: Math.ceil(result.data.length / 20),
+                            total_count: result.data.length
+                        }
+                    });
+                    console.log('初始化加载股票数据完成，共加载', stocks.length, '条记录');
                 } else {
                     showError('searchResult', result.message);
                 }
@@ -468,74 +504,124 @@
             // 获取搜索参数
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
-            const minPrice = document.getElementById('minPrice').value;
-            const maxPrice = document.getElementById('maxPrice').value;
-            const minMarketCap = document.getElementById('minMarketCap').value;
-            const maxMarketCap = document.getElementById('maxMarketCap').value;
-            const minPeRatio = document.getElementById('minPeRatio').value;
-            const maxPeRatio = document.getElementById('maxPeRatio').value;
-            const minPbRatio = document.getElementById('minPbRatio').value;
-            const maxPbRatio = document.getElementById('maxPbRatio').value;
-            
-            // 构建查询参数
-            const params = new URLSearchParams();
-            if (keyword) params.append('keyword', keyword);
-            if (industry) params.append('industry', industry);
-            if (minPrice) params.append('min_price', minPrice);
-            if (maxPrice) params.append('max_price', maxPrice);
-            if (minMarketCap) params.append('min_market_cap', minMarketCap);
-            if (maxMarketCap) params.append('max_market_cap', maxMarketCap);
-            if (minPeRatio) params.append('min_pe_ratio', minPeRatio);
-            if (maxPeRatio) params.append('max_pe_ratio', maxPeRatio);
-            if (minPbRatio) params.append('min_pb_ratio', minPbRatio);
-            if (maxPbRatio) params.append('max_pb_ratio', maxPbRatio);
-            params.append('sort_by', sortBy);
-            params.append('sort_order', newSortOrder);
-            params.append('page', 1);
-            params.append('page_size', 20);
             
             showLoading('searchResult');
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/list?${params.toString()}`);
+                const response = await fetch(`${API_BASE}/stocks/list`);
                 const result = await response.json();
                 
-                if (result.code === 200) {
-                    displaySearchResults(result.data);
+                if (result.success) {
+                    let stocks = result.data;
+                    
+                    // 客户端过滤
+                    if (keyword) {
+                        stocks = stocks.filter(stock => 
+                            stock.symbol.toLowerCase().includes(keyword.toLowerCase()) ||
+                            stock.name.toLowerCase().includes(keyword.toLowerCase())
+                        );
+                    }
+                    
+                    if (industry) {
+                        stocks = stocks.filter(stock => 
+                            stock.industry && stock.industry.toLowerCase().includes(industry.toLowerCase())
+                        );
+                    }
+                    
+                    // 客户端排序
+                    stocks.sort((a, b) => {
+                        let valA = a[sortBy];
+                        let valB = b[sortBy];
+                        
+                        if (valA === null || valA === undefined) valA = '';
+                        if (valB === null || valB === undefined) valB = '';
+                        
+                        if (typeof valA === 'string') valA = valA.toLowerCase();
+                        if (typeof valB === 'string') valB = valB.toLowerCase();
+                        
+                        if (newSortOrder === 'ASC') {
+                            return valA > valB ? 1 : -1;
+                        } else {
+                            return valA < valB ? 1 : -1;
+                        }
+                    });
+                    
+                    // 分页
+                    const page = 1;
+                    const pageSize = 20;
+                    const startIndex = (page - 1) * pageSize;
+                    const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
+                    
+                    displaySearchResults({
+                        stocks: paginatedStocks,
+                        pagination: {
+                            current_page: page,
+                            total_pages: Math.ceil(stocks.length / pageSize),
+                            total_count: stocks.length
+                        }
+                    });
+                    
                     // 更新URL以反映当前排序状态
+                    const params = new URLSearchParams();
+                    if (keyword) params.append('keyword', keyword);
+                    if (industry) params.append('industry', industry);
+                    params.append('sort_by', sortBy);
+                    params.append('sort_order', newSortOrder);
                     const newUrl = `${window.location.pathname}?${params.toString()}`;
                     window.history.replaceState({}, '', newUrl);
                 } else {
                     showError('searchResult', result.message);
                 }
             } catch (error) {
-                showError('searchResult', `搜索失败: ${error.message}`);
+                showError('searchResult', `排序失败: ${error.message}`);
             }
         }
 
         // 股票搜索功能
         async function searchStocks() {
-            // 获取搜索参数
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
-            
-            // 构建查询参数
-            const params = new URLSearchParams();
-            if (keyword) params.append('keyword', keyword);
-            if (industry) params.append('industry', industry);
-            params.append('sort_by', 'symbol');
-            params.append('sort_order', 'ASC');
-            params.append('page', 1);
-            params.append('page_size', 20);
             
             showLoading('searchResult');
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/list?${params.toString()}`);
+                const response = await fetch(`${API_BASE}/stocks/list`);
                 const result = await response.json();
                 
-                if (result.code === 200) {
-                    displaySearchResults(result.data);
+                if (result.success) {
+                    let stocks = result.data;
+                    
+                    // 客户端过滤
+                    if (keyword) {
+                        stocks = stocks.filter(stock => 
+                            stock.symbol.toLowerCase().includes(keyword.toLowerCase()) ||
+                            stock.name.toLowerCase().includes(keyword.toLowerCase())
+                        );
+                    }
+                    
+                    if (industry) {
+                        stocks = stocks.filter(stock => 
+                            stock.industry && stock.industry.toLowerCase().includes(industry.toLowerCase())
+                        );
+                    }
+                    
+                    // 排序
+                    stocks.sort((a, b) => a.symbol.localeCompare(b.symbol));
+                    
+                    // 分页
+                    const page = 1;
+                    const pageSize = 20;
+                    const startIndex = (page - 1) * pageSize;
+                    const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
+                    
+                    displaySearchResults({
+                        stocks: paginatedStocks,
+                        pagination: {
+                            current_page: page,
+                            total_pages: Math.ceil(stocks.length / pageSize),
+                            total_count: stocks.length
+                        }
+                    });
                 } else {
                     showError('searchResult', result.message);
                 }
@@ -549,41 +635,82 @@
             // 获取搜索参数
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
-            const minPrice = document.getElementById('minPrice').value;
-            const maxPrice = document.getElementById('maxPrice').value;
-            const minMarketCap = document.getElementById('minMarketCap').value;
-            const maxMarketCap = document.getElementById('maxMarketCap').value;
-            const minPeRatio = document.getElementById('minPeRatio').value;
-            const maxPeRatio = document.getElementById('maxPeRatio').value;
-            const minPbRatio = document.getElementById('minPbRatio').value;
-            const maxPbRatio = document.getElementById('maxPbRatio').value;
-            
-            // 构建查询参数
-            const params = new URLSearchParams();
-            if (keyword) params.append('keyword', keyword);
-            if (industry) params.append('industry', industry);
-            if (minPrice) params.append('min_price', minPrice);
-            if (maxPrice) params.append('max_price', maxPrice);
-            if (minMarketCap) params.append('min_market_cap', minMarketCap);
-            if (maxMarketCap) params.append('max_market_cap', maxMarketCap);
-            if (minPeRatio) params.append('min_pe_ratio', minPeRatio);
-            if (maxPeRatio) params.append('max_pe_ratio', maxPeRatio);
-            if (minPbRatio) params.append('min_pb_ratio', minPbRatio);
-            if (maxPbRatio) params.append('max_pb_ratio', maxPbRatio);
-            params.append('sort_by', 'symbol');
-            params.append('sort_order', 'ASC');
-            params.append('page', 1);
-            params.append('page_size', 20);
+            const minPrice = parseFloat(document.getElementById('minPrice').value) || null;
+            const maxPrice = parseFloat(document.getElementById('maxPrice').value) || null;
+            const minMarketCap = parseFloat(document.getElementById('minMarketCap').value) || null;
+            const maxMarketCap = parseFloat(document.getElementById('maxMarketCap').value) || null;
+            const minPeRatio = parseFloat(document.getElementById('minPeRatio').value) || null;
+            const maxPeRatio = parseFloat(document.getElementById('maxPeRatio').value) || null;
+            const minPbRatio = parseFloat(document.getElementById('minPbRatio').value) || null;
+            const maxPbRatio = parseFloat(document.getElementById('maxPbRatio').value) || null;
             
             showLoading('searchResult');
             closeAdvancedSearch(); // 关闭弹窗
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/list?${params.toString()}`);
+                const response = await fetch(`${API_BASE}/stocks/list`);
                 const result = await response.json();
                 
-                if (result.code === 200) {
-                    displaySearchResults(result.data);
+                if (result.success) {
+                    let stocks = result.data;
+                    
+                    // 客户端过滤
+                    if (keyword) {
+                        stocks = stocks.filter(stock => 
+                            stock.symbol.toLowerCase().includes(keyword.toLowerCase()) ||
+                            stock.name.toLowerCase().includes(keyword.toLowerCase())
+                        );
+                    }
+                    
+                    if (industry) {
+                        stocks = stocks.filter(stock => 
+                            stock.industry && stock.industry.toLowerCase().includes(industry.toLowerCase())
+                        );
+                    }
+                    
+                    // 数值范围过滤
+                    if (minPrice !== null) {
+                        stocks = stocks.filter(stock => (stock.close || 0) >= minPrice);
+                    }
+                    if (maxPrice !== null) {
+                        stocks = stocks.filter(stock => (stock.close || 0) <= maxPrice);
+                    }
+                    if (minMarketCap !== null) {
+                        stocks = stocks.filter(stock => (stock.market_cap || 0) >= minMarketCap * 100000000);
+                    }
+                    if (maxMarketCap !== null) {
+                        stocks = stocks.filter(stock => (stock.market_cap || 0) <= maxMarketCap * 100000000);
+                    }
+                    if (minPeRatio !== null) {
+                        stocks = stocks.filter(stock => (stock.pe_ratio || 0) >= minPeRatio);
+                    }
+                    if (maxPeRatio !== null) {
+                        stocks = stocks.filter(stock => (stock.pe_ratio || 0) <= maxPeRatio);
+                    }
+                    if (minPbRatio !== null) {
+                        stocks = stocks.filter(stock => (stock.pb_ratio || 0) >= minPbRatio);
+                    }
+                    if (maxPbRatio !== null) {
+                        stocks = stocks.filter(stock => (stock.pb_ratio || 0) <= maxPbRatio);
+                    }
+                    
+                    // 排序
+                    stocks.sort((a, b) => a.symbol.localeCompare(b.symbol));
+                    
+                    // 分页
+                    const page = 1;
+                    const pageSize = 20;
+                    const startIndex = (page - 1) * pageSize;
+                    const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
+                    
+                    displaySearchResults({
+                        stocks: paginatedStocks,
+                        pagination: {
+                            current_page: page,
+                            total_pages: Math.ceil(stocks.length / pageSize),
+                            total_count: stocks.length
+                        }
+                    });
                 } else {
                     showError('searchResult', result.message);
                 }
@@ -629,6 +756,7 @@
                             <th onclick="sortTable('symbol')" class="${currentSortBy === 'symbol' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">股票代码</th>
                             <th onclick="sortTable('name')" class="${currentSortBy === 'name' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">股票名称</th>
                             <th onclick="sortTable('industry')" class="${currentSortBy === 'industry' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">行业</th>
+                            <th onclick="sortTable('close')" class="${currentSortBy === 'close' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">最新收盘价(元)</th>
                             <th onclick="sortTable('market_cap')" class="${currentSortBy === 'market_cap' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">总市值(亿)</th>
                             <th onclick="sortTable('pe_ratio')" class="${currentSortBy === 'pe_ratio' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">市盈率</th>
                             <th onclick="sortTable('pb_ratio')" class="${currentSortBy === 'pb_ratio' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">市净率</th>
@@ -673,6 +801,7 @@
                         <td>${stock.symbol}</td>
                         <td>${stock.name}</td>
                         <td>${stock.industry || ''}</td>
+                        <td>${stock.close ? stock.close.toFixed(2) : ''}</td>
                         <td>${marketCapDisplay || ''}</td>
                         <td>${peRatioDisplay || ''}</td>
                         <td>${pbRatioDisplay || ''}</td>
@@ -701,55 +830,84 @@
         }
         
         async function goToPage(page) {
-            // 获取当前搜索参数
+            // 获取搜索参数
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
-            const minPrice = document.getElementById('minPrice').value;
-            const maxPrice = document.getElementById('maxPrice').value;
-            const minMarketCap = document.getElementById('minMarketCap').value;
-            const maxMarketCap = document.getElementById('maxMarketCap').value;
-            const minPeRatio = document.getElementById('minPeRatio').value;
-            const maxPeRatio = document.getElementById('maxPeRatio').value;
-            const minPbRatio = document.getElementById('minPbRatio').value;
-            const maxPbRatio = document.getElementById('maxPbRatio').value;
-            
-            // 获取当前排序状态
-            const sortBy = new URLSearchParams(window.location.search).get('sort_by') || 'symbol';
-            const sortOrder = new URLSearchParams(window.location.search).get('sort_order') || 'ASC';
-            
-            // 构建查询参数
-            const params = new URLSearchParams();
-            if (keyword) params.append('keyword', keyword);
-            if (industry) params.append('industry', industry);
-            if (minPrice) params.append('min_price', minPrice);
-            if (maxPrice) params.append('max_price', maxPrice);
-            if (minMarketCap) params.append('min_market_cap', minMarketCap);
-            if (maxMarketCap) params.append('max_market_cap', maxMarketCap);
-            if (minPeRatio) params.append('min_pe_ratio', minPeRatio);
-            if (maxPeRatio) params.append('max_pe_ratio', maxPeRatio);
-            if (minPbRatio) params.append('min_pb_ratio', minPbRatio);
-            if (maxPbRatio) params.append('max_pb_ratio', maxPbRatio);
-            params.append('sort_by', sortBy);
-            params.append('sort_order', sortOrder);
-            params.append('page', page);
-            params.append('page_size', 20);
             
             showLoading('searchResult');
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/list?${params.toString()}`);
+                const response = await fetch(`${API_BASE}/stocks/list`);
                 const result = await response.json();
                 
-                if (result.code === 200) {
-                    displaySearchResults(result.data);
+                if (result.success) {
+                    let stocks = result.data;
+                    
+                    // 客户端过滤
+                    if (keyword) {
+                        stocks = stocks.filter(stock => 
+                            stock.symbol.toLowerCase().includes(keyword.toLowerCase()) ||
+                            stock.name.toLowerCase().includes(keyword.toLowerCase())
+                        );
+                    }
+                    
+                    if (industry) {
+                        stocks = stocks.filter(stock => 
+                            stock.industry && stock.industry.toLowerCase().includes(industry.toLowerCase())
+                        );
+                    }
+                    
+                    // 获取当前排序状态
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const sortBy = urlParams.get('sort_by') || 'symbol';
+                    const sortOrder = urlParams.get('sort_order') || 'ASC';
+                    
+                    // 客户端排序
+                    stocks.sort((a, b) => {
+                        let valA = a[sortBy];
+                        let valB = b[sortBy];
+                        
+                        if (valA === null || valA === undefined) valA = '';
+                        if (valB === null || valB === undefined) valB = '';
+                        
+                        if (typeof valA === 'string') valA = valA.toLowerCase();
+                        if (typeof valB === 'string') valB = valB.toLowerCase();
+                        
+                        if (sortOrder === 'ASC') {
+                            return valA > valB ? 1 : -1;
+                        } else {
+                            return valA < valB ? 1 : -1;
+                        }
+                    });
+                    
+                    // 分页
+                    const pageSize = 20;
+                    const startIndex = (page - 1) * pageSize;
+                    const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
+                    
+                    displaySearchResults({
+                        stocks: paginatedStocks,
+                        pagination: {
+                            current_page: page,
+                            total_pages: Math.ceil(stocks.length / pageSize),
+                            total_count: stocks.length
+                        }
+                    });
+                    
                     // 更新URL以反映当前状态
+                    const params = new URLSearchParams();
+                    if (keyword) params.append('keyword', keyword);
+                    if (industry) params.append('industry', industry);
+                    params.append('sort_by', sortBy);
+                    params.append('sort_order', sortOrder);
+                    params.append('page', page);
                     const newUrl = `${window.location.pathname}?${params.toString()}`;
                     window.history.replaceState({}, '', newUrl);
                 } else {
                     showError('searchResult', result.message);
                 }
             } catch (error) {
-                showError('searchResult', `搜索失败: ${error.message}`);
+                showError('searchResult', `分页失败: ${error.message}`);
             }
         }
 
