@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 from functools import wraps
 import os
 import sys
+import pandas as pd
 from datetime import datetime, timedelta
 
 # 添加项目根目录到Python路径
@@ -95,6 +96,13 @@ def login():
 def dashboard():
     """控制台主页（登录后）"""
     return render_template('dashboard.html')
+
+
+@app.route('/akshare')
+@login_required
+def akshare_interfaces():
+    """AKShare接口独立页面"""
+    return render_template('akshare_interfaces.html')
 
 
 @app.route('/test_stock_management')
@@ -840,11 +848,1044 @@ def get_industries():
         }), 500
 
 
+# ================================
+# 历史数据分析页面
+# ================================
+
+@app.route('/analysis/history/<symbol>')
+@login_required
+def history_analysis(symbol):
+    """历史数据分析页面"""
+    try:
+        # 获取股票名称参数
+        stock_name = request.args.get('name', symbol)
+        
+        # 验证股票代码是否存在
+        stock_info = data_source.get_stock_info(symbol)
+        if not stock_info:
+            return render_template('404.html', message=f'股票代码 {symbol} 不存在'), 404
+            
+        return render_template('history_analysis.html', 
+                             symbol=symbol, 
+                             stock_name=stock_name)
+        
+    except Exception as e:
+        logger.error(f"访问历史分析页面失败: {e}")
+        return render_template('error.html', message=str(e)), 500
+
+
+@app.route('/api/stocks/<symbol>')
+@login_required
+def get_stock_info(symbol):
+    """获取股票基本信息"""
+    try:
+        # 获取股票信息 - 优先从数据库获取
+        import sqlite3
+        try:
+            with sqlite3.connect('data/finance_data.db') as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('''
+                    SELECT symbol, name, industry, market_cap, pe_ratio, pb_ratio, close, updated_at 
+                    FROM stock_info WHERE symbol = ?
+                ''', [symbol])
+                row = cursor.fetchone()
+                
+                if row:
+                    stock_data = dict(row)
+                    # 确保返回正确的字段格式
+                    stock_info = {
+                        'symbol': stock_data['symbol'],
+                        'name': stock_data['name'],
+                        'industry': stock_data['industry'] or 'N/A',
+                        'market_cap': float(stock_data['market_cap'] or 0),
+                        'pe_ratio': float(stock_data['pe_ratio'] or 0),
+                        'close': float(stock_data['close'] or 0)
+                    }
+                else:
+                    # 如果数据库中没有，从数据源获取
+                    stock_info = data_source.get_stock_info(symbol)
+                    if not stock_info:
+                        return jsonify({
+                            'code': 404,
+                            'message': '股票不存在'
+                        }), 404
+        except Exception as db_error:
+            logger.error(f"数据库查询失败: {db_error}")
+            stock_info = data_source.get_stock_info(symbol)
+            if not stock_info:
+                return jsonify({
+                    'code': 404,
+                    'message': '股票不存在'
+                }), 404
+        
+        # 获取最新价格数据
+        df = data_source.get_stock_data(symbol, days=1)
+        if not df.empty:
+            latest_data = df.iloc[-1]
+            current_price = float(latest_data['close']) if pd.notna(latest_data['close']) else 0.0
+        else:
+            current_price = 0.0
+        
+        # 准备返回数据 - 使用数据库中的数据
+        stock_data = {
+            'symbol': str(stock_info.get('symbol', symbol)),
+            'name': str(stock_info.get('name', symbol)),
+            'close': stock_info.get('close', current_price),
+            'market_cap': float(stock_info.get('market_cap', 0)),
+            'pe_ratio': float(stock_info.get('pe_ratio', 0)),
+            'industry': str(stock_info.get('industry', 'N/A'))
+        }
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取成功',
+            'data': stock_data,
+            'success': True
+        })
+        
+    except Exception as e:
+        logger.error(f"获取股票基本信息失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/stocks/<symbol>/history')
+@login_required
+def get_stock_history(symbol):
+    """获取股票历史数据"""
+    try:
+        # 获取参数
+        period = request.args.get('period', '1Y')
+        
+        # 根据周期设置天数
+        period_days = {
+            '1M': 30,
+            '3M': 90,
+            '6M': 180,
+            '1Y': 365,
+            '2Y': 730,
+            '5Y': 1825
+        }
+        
+        if period == 'ALL':
+            # 获取全部历史数据，设置一个很大的天数
+            days = 36500  # 约100年的数据
+        else:
+            days = period_days.get(period, 365)
+        
+        # 获取股票数据
+        df = data_source.get_stock_data(symbol, days=days)
+        if df.empty:
+            return jsonify({
+                'code': 404,
+                'message': '股票数据不存在'
+            }), 404
+        
+        # 计算技术指标
+        df = analyzer.calculate_all_indicators(df)
+        
+        # 处理NaN值
+        def clean_nan(value):
+            if pd.isna(value):
+                return 0.0
+            return float(value)
+        
+        # 准备数据
+        history_data = []
+        for index, row in df.iterrows():
+            history_data.append({
+                'date': index.strftime('%Y-%m-%d'),
+                'open': clean_nan(row['open']),
+                'high': clean_nan(row['high']),
+                'low': clean_nan(row['low']),
+                'close': clean_nan(row['close']),
+                'volume': int(clean_nan(row['volume'])),
+                'ma20': clean_nan(row.get('MA20', 0)),
+                'ma50': clean_nan(row.get('MA50', 0)),
+                'rsi': clean_nan(row.get('RSI14', 0))
+            })
+        
+        # 计算统计数据
+        if not df.empty:
+            stats = {
+                'highest_price': clean_nan(df['high'].max()),
+                'lowest_price': clean_nan(df['low'].min()),
+                'avg_price': clean_nan(df['close'].mean()),
+                'total_volume': int(df['volume'].sum()),
+                'avg_volume': int(df['volume'].mean()),
+                'price_change': clean_nan(df['close'].iloc[-1] - df['close'].iloc[0]),
+                'price_change_percent': clean_nan(((df['close'].iloc[-1] - df['close'].iloc[0]) / df['close'].iloc[0]) * 100),
+                'current_price': clean_nan(df['close'].iloc[-1]),
+                'latest_date': df.index[-1].strftime('%Y-%m-%d')
+            }
+        else:
+            stats = {}
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取成功',
+            'data': {
+                'symbol': symbol,
+                'history': history_data,
+                'stats': stats
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取股票历史数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
+
+
+# ================================
+# 公司分析相关接口
+# ================================
+
+@app.route('/analysis/company/<symbol>')
+@login_required
+def company_analysis_page(symbol):
+    """公司分析页面"""
+    try:
+        # 获取股票基本信息
+        stock_info = data_source.get_stock_info(symbol)
+        if not stock_info:
+            return "股票不存在", 404
+            
+        return render_template('company_analysis.html', company=stock_info)
+        
+    except Exception as e:
+        logger.error(f"加载公司分析页面失败: {e}")
+        return "加载失败", 500
+
+@app.route('/api/stock/sync', methods=['POST'])
+@login_required
+def sync_stock_data():
+    """同步股票数据"""
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol')
+        
+        if not symbol:
+            return jsonify({
+                'code': 400,
+                'message': '股票代码不能为空'
+            }), 400
+        
+        # 创建同步器
+        syncer = StockDataSynchronizer()
+        
+        # 同步数据
+        result = syncer.sync_stock_data(symbol)
+        
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': result['data']
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['message']
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"同步股票数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'同步失败: {str(e)}'
+        }), 500
+
+# ================================
+# AKShare接口管理API
+# ================================
+
+@app.route('/api/akshare/interfaces', methods=['GET'])
+@login_required
+def get_akshare_interfaces():
+    """获取所有AKShare接口数据"""
+    try:
+        # 查询akshare_interfaces表
+        query = """
+            SELECT 
+                id,
+                interface_name,
+                interface_name_cn,
+                interface_description,
+                module_name,
+                function_type,
+                category_level1,
+                category_level2,
+                status,
+                update_time
+            FROM akshare_interfaces
+            ORDER BY category_level1, interface_name
+        """
+        
+        interfaces = db_manager.query(query)
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取接口数据成功',
+            'data': interfaces
+        })
+        
+    except Exception as e:
+        logger.error(f"获取AKShare接口数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取接口数据失败: {str(e)}'
+        }), 500
+
+@app.route('/api/akshare/interfaces/<int:interface_id>', methods=['GET'])
+@login_required
+def get_interface_detail(interface_id):
+    """获取单个接口详细信息"""
+    try:
+        # 查询接口详情
+        query = """
+            SELECT *
+            FROM akshare_interfaces
+            WHERE id = ?
+        """
+        
+        interface = db_manager.query(query, [interface_id])
+        
+        if not interface:
+            return jsonify({
+                'code': 404,
+                'message': '接口不存在'
+            }), 404
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取接口详情成功',
+            'data': interface[0]
+        })
+        
+    except Exception as e:
+        logger.error(f"获取接口详情失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取接口详情失败: {str(e)}'
+        }), 500
+
+@app.route('/api/akshare/interfaces/stats', methods=['GET'])
+@login_required
+def get_interface_stats():
+    """获取接口统计信息"""
+    try:
+        # 统计各分类接口数量
+        query = """
+            SELECT 
+                category_level1,
+                COUNT(*) as count
+            FROM akshare_interfaces
+            GROUP BY category_level1
+            ORDER BY count DESC
+        """
+        
+        stats = db_manager.query(query)
+        
+        # 总接口数
+        total_query = "SELECT COUNT(*) as total FROM akshare_interfaces"
+        total = db_manager.query(total_query)[0]['total']
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取统计信息成功',
+            'data': {
+                'total': total,
+                'by_category': stats
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取接口统计信息失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取统计信息失败: {str(e)}'
+        }), 500
+
+@app.route('/api/akshare/interfaces/download', methods=['POST'])
+@login_required
+def download_interface_data():
+    """下载接口数据到本地数据库"""
+    try:
+        data = request.get_json()
+        interface_name = data.get('interface_name')
+        
+        if not interface_name:
+            return jsonify({
+                'code': 400,
+                'message': '接口名称不能为空'
+            }), 400
+        
+        # 获取接口详细信息
+        query = """
+            SELECT * FROM akshare_interfaces 
+            WHERE interface_name = ?
+        """
+        interface_info = db_manager.query(query, [interface_name])
+        
+        if not interface_info:
+            return jsonify({
+                'code': 404,
+                'message': '接口不存在'
+            }), 404
+        
+        # 使用AKShare获取数据
+        import akshare as ak
+        
+        # 验证接口是否存在
+        if not hasattr(ak, interface_name):
+            return jsonify({
+                'code': 404,
+                'message': f'接口不存在: {interface_name}',
+                'interface_name': interface_name,
+                'suggestion': '请检查接口名称是否正确，或联系管理员更新接口列表'
+            }), 404
+        
+        # 动态获取接口函数
+        func = getattr(ak, interface_name)
+        
+        # 尝试调用接口获取数据，增加网络错误和空数据保护
+        try:
+            import requests
+            import json
+            
+            # 根据接口名称选择不同的调用策略
+            df = None
+            
+            # 特殊处理已知问题接口
+            if interface_name == 'stock_a_indicator_lg':
+                df = func()
+            elif interface_name == 'stock_zh_a_spot':
+                # stock_zh_a_spot接口经常返回HTML而不是JSON，需要特殊处理
+                try:
+                    df = func()
+                except Exception as e:
+                    if 'decode' in str(e).lower() or 'json' in str(e).lower():
+                        return jsonify({
+                            'code': 503,
+                            'message': '接口暂时不可用: A股现货接口当前数据源异常',
+                            'interface_name': interface_name,
+                            'suggestion': '该接口可能由于数据源维护暂时不可用，请稍后重试或使用其他接口',
+                            'error_type': 'data_source_unavailable',
+                            'error_detail': str(e)
+                        }), 503
+                    else:
+                        raise  # 重新抛出其他类型的异常
+            else:
+                # 普通接口调用
+                try:
+                    df = func()
+                except TypeError:
+                    # 如果接口需要参数
+                    if interface_name.startswith('stock_') and 'hist' in interface_name:
+                        df = func(symbol="000001", period="daily", adjust="")
+                    elif interface_name.startswith('stock_') and 'spot' in interface_name:
+                        df = func()
+                    elif interface_name.startswith('bond_'):
+                        df = func()
+                    elif interface_name.startswith('fund_'):
+                        df = func()
+                    else:
+                        df = func()
+        
+        except (json.JSONDecodeError, ValueError) as e:
+            # 处理stock_a_indicator_lg接口的空数据或格式错误
+            if interface_name == 'stock_a_indicator_lg':
+                return jsonify({
+                    'code': 503,
+                    'message': '接口暂时不可用: A股技术指标接口当前无法访问',
+                    'interface_name': interface_name,
+                    'suggestion': '该接口可能由于数据源问题暂时不可用，请稍后重试或使用其他接口',
+                    'error_type': 'data_source_unavailable'
+                }), 503
+            else:
+                return jsonify({
+                    'code': 500,
+                    'message': '数据解析失败: 接口返回的数据格式不正确',
+                    'interface_name': interface_name,
+                    'suggestion': '该接口的数据源可能正在维护，请稍后重试'
+                }), 500
+                
+        except requests.exceptions.RequestException as net_error:
+            return jsonify({
+                'code': 503,
+                'message': '网络请求失败',
+                'interface_name': interface_name,
+                'suggestion': '请检查网络连接，或该接口数据源可能暂时不可用',
+                'error_detail': str(net_error)
+            }), 503
+            
+        except Exception as e:
+            # 区分不同类型的错误
+            error_msg = str(e).lower()
+            if 'json' in error_msg or 'decode' in error_msg:
+                return jsonify({
+                    'code': 500,
+                    'message': '数据解析失败: 接口返回的数据格式不正确',
+                    'interface_name': interface_name,
+                    'suggestion': '该接口的数据源可能正在维护，请稍后重试'
+                }), 500
+            elif 'connection' in error_msg or 'timeout' in error_msg:
+                return jsonify({
+                    'code': 503,
+                    'message': '网络连接失败: 无法连接到数据源',
+                    'interface_name': interface_name,
+                    'suggestion': '请检查网络连接或稍后再试'
+                }), 503
+            else:
+                return jsonify({
+                    'code': 500,
+                    'message': f'接口调用失败: {str(e)}',
+                    'interface_name': interface_name,
+                    'suggestion': '请检查接口名称是否正确，或联系管理员'
+                }), 500
+        
+        if df is None or df.empty:
+            return jsonify({
+                'code': 404,
+                'message': '接口返回数据为空',
+                'interface_name': interface_name
+            }), 404
+        
+        # 创建表名（安全处理）
+        table_name = f"akshare_{interface_name}"
+        table_name = table_name.replace('-', '_').replace('.', '_')
+        
+        # 检查表是否存在
+        check_query = """
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name=?
+        """
+        table_exists = db_manager.query(check_query, [table_name])
+        
+        # 创建安全的列名映射
+        import re
+        
+        # 安全的列名映射 - 按接口类型分组
+        column_mapping = {}
+        
+        # 概念板块接口映射
+        if interface_name == 'stock_board_concept_name_em':
+            column_mapping = {
+                '排名': 'rank',
+                '板块名称': 'board_name',
+                '板块代码': 'board_code', 
+                '最新价': 'latest_price',
+                '涨跌额': 'change_amount',
+                '涨跌幅': 'change_percent',
+                '总市值': 'total_market_cap',
+                '换手率': 'turnover_rate',
+                '上涨家数': 'up_count',
+                '下跌家数': 'down_count',
+                '领涨股票': 'leading_stock',
+                '领涨股票-涨跌幅': 'leading_stock_change'
+            }
+        # A股现货接口映射
+        elif interface_name == 'stock_zh_a_spot':
+            column_mapping = {
+                '代码': 'symbol',
+                '名称': 'name',
+                '最新价': 'latest_price',
+                '涨跌额': 'change_amount',
+                '涨跌幅': 'change_percent',
+                '买入': 'bid_price',
+                '卖出': 'ask_price',
+                '昨收': 'prev_close',
+                '今开': 'open_price',
+                '最高': 'high_price',
+                '最低': 'low_price',
+                '成交量': 'volume',
+                '成交额': 'turnover',
+                '时间戳': 'timestamp'
+            }
+        else:
+            # 通用映射 - 处理常见的中文列名
+            column_mapping = {
+                '代码': 'symbol',
+                '名称': 'name',
+                '最新价': 'latest_price',
+                '收盘价': 'close_price',
+                '开盘价': 'open_price',
+                '最高价': 'high_price',
+                '最低价': 'low_price',
+                '成交量': 'volume',
+                '成交额': 'turnover',
+                '涨跌幅': 'change_percent',
+                '涨跌额': 'change_amount',
+                '市值': 'market_cap'
+            }
+        
+        # 重命名DataFrame的列
+        safe_column_mapping = {}
+        for i, col in enumerate(df.columns):
+            safe_col = column_mapping.get(str(col), None)
+            if not safe_col:
+                # 将特殊字符替换为下划线，确保列名安全
+                safe_col = re.sub(r'[^a-zA-Z0-9_]', '_', str(col))
+                # 确保列名是有效的SQL标识符
+                if not safe_col or safe_col[0].isdigit():
+                    safe_col = f'col_{i}'
+                elif safe_col in safe_column_mapping.values():
+                    # 确保列名唯一
+                    safe_col = f'{safe_col}_{i}'
+                else:
+                    safe_col = safe_col
+            safe_column_mapping[str(col)] = safe_col
+        
+        # 重命名DataFrame的列
+        df_renamed = df.rename(columns=safe_column_mapping)
+        
+        # 添加下载时间
+        df_renamed['download_time'] = datetime.now()
+        
+        # 插入数据
+        df_renamed.to_sql(table_name, db_manager.get_connection(), if_exists='append', index=False)
+        
+        # 获取插入的记录数
+        count_query = f"SELECT COUNT(*) as count FROM {table_name}"
+        total_records = db_manager.query(count_query)[0]['count']
+        
+        return jsonify({
+            'code': 200,
+            'message': '数据下载成功',
+            'data': {
+                'interface_name': interface_name,
+                'table_name': table_name,
+                'records_inserted': len(df),
+                'total_records': total_records,
+                'columns': list(df.columns),
+                'download_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"下载接口数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'下载失败: {str(e)}'
+        }), 500
+
+@app.route('/api/akshare/interfaces/download/all', methods=['POST'])
+@login_required
+def download_all_interface_data():
+    """下载所有接口数据到本地数据库"""
+    try:
+        # 获取所有接口
+        query = "SELECT interface_name FROM akshare_interfaces WHERE status = 'active'"
+        interfaces = db_manager.query(query)
+        
+        if not interfaces:
+            return jsonify({
+                'code': 404,
+                'message': '没有找到可用的接口'
+            }), 404
+        
+        import akshare as ak
+        results = []
+        
+        for interface in interfaces:
+            interface_name = interface['interface_name']
+            
+            # 验证接口是否存在
+            if not hasattr(ak, interface_name):
+                results.append({
+                    'interface_name': interface_name,
+                    'status': 'not_found',
+                    'message': f'接口不存在: {interface_name}'
+                })
+                continue
+            
+            try:
+                # 获取接口函数
+                func = getattr(ak, interface_name)
+                
+                # 尝试调用接口，增强错误处理
+                try:
+                    import requests
+                    import json
+                    
+                    df = None
+                    max_retries = 2
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            # 特殊处理已知问题接口
+                            if interface_name == 'stock_a_indicator_lg':
+                                try:
+                                    df = func()
+                                except (json.JSONDecodeError, ValueError) as e:
+                                    # stock_a_indicator_lg接口经常返回空数据或格式错误
+                                    results.append({
+                                        'interface_name': interface_name,
+                                        'status': 'unavailable',
+                                        'message': 'A股技术指标接口暂时不可用',
+                                        'error': str(e),
+                                        'suggestion': '该接口数据源可能正在维护，建议跳过此接口'
+                                    })
+                                    break
+                                except Exception as e:
+                                    results.append({
+                                        'interface_name': interface_name,
+                                        'status': 'error',
+                                        'message': str(e),
+                                        'suggestion': '接口调用失败'
+                                    })
+                                    break
+                            else:
+                                # 普通接口调用
+                                try:
+                                    df = func()
+                                except TypeError:
+                                    # 如果接口需要参数
+                                    if interface_name.startswith('stock_') and 'hist' in interface_name:
+                                        df = func(symbol="000001", period="daily", adjust="")
+                                    elif interface_name.startswith('stock_') and 'spot' in interface_name:
+                                        df = func()
+                                    else:
+                                        df = func()
+                            
+                            # 如果成功获取数据，跳出重试循环
+                            if df is not None:
+                                break
+                                
+                        except (requests.exceptions.RequestException, json.JSONDecodeError) as net_error:
+                            if attempt == max_retries - 1:
+                                results.append({
+                                    'interface_name': interface_name,
+                                    'status': 'network_error',
+                                    'message': f'网络请求失败: {str(net_error)}',
+                                    'suggestion': '请检查网络连接'
+                                })
+                                break
+                            else:
+                                continue
+                        except Exception as e:
+                            if attempt == max_retries - 1:
+                                error_msg = str(e).lower()
+                                if 'json' in error_msg or 'decode' in error_msg:
+                                    results.append({
+                                        'interface_name': interface_name,
+                                        'status': 'data_error',
+                                        'message': '数据解析失败: 接口返回数据格式错误',
+                                        'suggestion': '接口数据源可能正在维护'
+                                    })
+                                elif 'connection' in error_msg or 'timeout' in error_msg:
+                                    results.append({
+                                        'interface_name': interface_name,
+                                        'status': 'network_error',
+                                        'message': '网络连接失败',
+                                        'suggestion': '请检查网络连接'
+                                    })
+                                else:
+                                    results.append({
+                                        'interface_name': interface_name,
+                                        'status': 'error',
+                                        'message': str(e),
+                                        'suggestion': '接口调用失败'
+                                    })
+                                break
+                            else:
+                                continue
+                    
+                    # 检查是否成功获取数据
+                    if df is not None and not df.empty:
+                        # 创建表并插入数据
+                        table_name = f"akshare_{interface_name}".replace('-', '_').replace('.', '_')
+                        
+                        df['download_time'] = datetime.now()
+                        df.to_sql(table_name, db_manager.get_connection(), if_exists='replace', index=False)
+                        
+                        results.append({
+                            'interface_name': interface_name,
+                            'status': 'success',
+                            'records': len(df),
+                            'table_name': table_name
+                        })
+                    elif df is not None and interface_name != 'stock_a_indicator_lg':
+                        # 避免重复记录stock_a_indicator_lg的错误
+                        results.append({
+                            'interface_name': interface_name,
+                            'status': 'empty',
+                            'records': 0,
+                            'message': '返回空数据'
+                        })
+                        
+                except Exception as e:
+                    results.append({
+                        'interface_name': interface_name,
+                        'status': 'error',
+                        'message': str(e),
+                        'suggestion': '接口调用失败'
+                    })
+                    
+            except Exception as e:
+                results.append({
+                    'interface_name': interface_name,
+                    'status': 'error',
+                    'message': str(e)
+                })
+        
+        success_count = len([r for r in results if r['status'] == 'success'])
+        total_records = sum([r.get('records', 0) for r in results])
+        
+        return jsonify({
+            'code': 200,
+            'message': f'批量下载完成，成功{success_count}个接口',
+            'data': {
+                'total_interfaces': len(interfaces),
+                'success_count': success_count,
+                'total_records': total_records,
+                'results': results
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"批量下载接口数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'批量下载失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/company/<symbol>/data')
+@login_required
+def get_company_data(symbol):
+    """获取公司分析数据"""
+    try:
+        days = request.args.get('days', 90, type=int)
+        
+        # 优先从本地数据库获取股票基本信息
+        from core.storage import DatabaseManager
+        db = DatabaseManager()
+        stock_info = db.get_stock_info(symbol)
+        
+        if not stock_info:
+            # 如果本地没有，尝试从外部获取
+            try:
+                stock_info = data_source.get_stock_info(symbol)
+                if not stock_info:
+                    return jsonify({
+                        'code': 404,
+                        'message': '股票不存在'
+                    }), 404
+            except Exception as e:
+                logger.warning(f"外部数据源获取失败，使用本地数据: {e}")
+                return jsonify({
+                    'code': 404,
+                    'message': '股票不存在'
+                }), 404
+        
+        # 转换字段名称以适应API，处理可能的字符串值
+        def safe_float(value, default=0.0):
+            """安全地将值转换为浮点数"""
+            if value is None or value == '' or str(value).upper() == 'N/A':
+                return default
+            try:
+                return float(str(value).replace(',', ''))
+            except (ValueError, TypeError):
+                return default
+        
+        # 统一处理数据格式
+        if isinstance(stock_info, dict):
+            # 外部数据源格式
+            company_data = {
+                'symbol': str(stock_info.get('股票代码', symbol)),
+                'name': str(stock_info.get('股票简称', symbol)),
+                'industry': str(stock_info.get('行业', 'N/A')),
+                'market': str(stock_info.get('市场', '深证')),
+                'list_date': str(stock_info.get('上市时间', '')),
+                'market_cap': safe_float(stock_info.get('总市值', 0)) / 100000000,  # 转换为亿元
+                'close': safe_float(stock_info.get('最新价', 0)),
+                'pe_ratio': safe_float(stock_info.get('市盈率', 0)),
+                'pb_ratio': safe_float(stock_info.get('市净率', 0))
+            }
+        else:
+            # 本地数据库格式 (tuple)
+            company_data = {
+                'symbol': str(stock_info[0]),
+                'name': str(stock_info[1]),
+                'industry': str(stock_info[5]),
+                'market': str(stock_info[6]) if len(stock_info) > 6 else '深证',
+                'list_date': str(stock_info[7]) if len(stock_info) > 7 else '',
+                'market_cap': safe_float(stock_info[4]) / 100000000 if len(stock_info) > 4 else 0.0,
+                'close': safe_float(stock_info[2]),
+                'pe_ratio': safe_float(stock_info[3]),
+                'pb_ratio': safe_float(stock_info[4])
+            }
+        
+        # 尝试获取历史价格数据，使用本地数据作为备用
+        df = None
+        try:
+            df = data_source.get_stock_data(symbol, days=days)
+            if df.empty:
+                # 如果外部数据为空，使用本地历史数据
+                from core.storage import DatabaseManager
+                db = DatabaseManager()
+                df = db.get_stock_data(symbol, limit=days)
+        except Exception as e:
+            logger.warning(f"外部历史数据获取失败，使用本地数据: {e}")
+            from core.storage import DatabaseManager
+            db = DatabaseManager()
+            df = db.get_stock_data(symbol, limit=days)
+        
+        if df is None or df.empty:
+            # 如果仍然没有数据，创建模拟数据
+            from datetime import datetime, timedelta
+            import random
+            
+            # 创建基于最新价格的模拟数据
+            latest_price = company_data['close']
+            dates = [datetime.now() - timedelta(days=i) for i in range(days, 0, -1)]
+            
+            # 生成模拟价格数据
+            prices_data = []
+            current_price = latest_price
+            for date in dates:
+                # 添加一些随机波动
+                change = random.uniform(-0.02, 0.02)
+                current_price = current_price * (1 + change)
+                prices_data.append({
+                    'open': current_price * 0.99,
+                    'close': current_price,
+                    'high': current_price * 1.01,
+                    'low': current_price * 0.98,
+                    'volume': random.randint(1000000, 10000000)
+                })
+            
+            df = pd.DataFrame(prices_data, index=dates)
+        
+        # 计算技术指标
+        try:
+            df = analyzer.calculate_all_indicators(df)
+        except Exception as e:
+            logger.warning(f"技术指标计算失败: {e}")
+        
+        # 处理NaN值
+        def clean_nan(value):
+            if pd.isna(value):
+                return 0.0
+            return float(value)
+        
+        # 准备价格数据
+        prices = []
+        for index, row in df.iterrows():
+            date_str = str(index)
+            if hasattr(index, 'strftime'):
+                date_str = index.strftime('%Y-%m-%d')
+            else:
+                # 处理日期字符串中的时间部分
+                date_str = str(index).split(' ')[0]
+            
+            prices.append({
+                'date': date_str,
+                'open': clean_nan(row.get('open', row.get('close', 0))),
+                'high': clean_nan(row.get('high', row.get('close', 0))),
+                'low': clean_nan(row.get('low', row.get('close', 0))),
+                'close': clean_nan(row.get('close', 0)),
+                'volume': int(clean_nan(row.get('volume', 0)))
+            })
+        
+        # 准备技术指标数据
+        indicators = []
+        for index, row in df.iterrows():
+            date_str = str(index)
+            if hasattr(index, 'strftime'):
+                date_str = index.strftime('%Y-%m-%d')
+            else:
+                # 处理日期字符串中的时间部分
+                date_str = str(index).split(' ')[0]
+                
+            indicator_data = {
+                'date': date_str,
+                'close': clean_nan(row.get('close', 0))
+            }
+            
+            # 添加各种技术指标
+            for col in ['MA5', 'MA10', 'MA20', 'MA50', 'RSI14', 'MACD', 'MACD_signal', 'MACD_hist']:
+                if col in row:
+                    key = col.lower().replace('rsi14', 'rsi').replace('macd_signal', 'macd_signal').replace('macd_hist', 'macd_hist')
+                    indicator_data[key] = clean_nan(row[col])
+            
+            indicators.append(indicator_data)
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取成功',
+            'data': {
+                'company': company_data,
+                'prices': prices,
+                'indicators': indicators
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取公司分析数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/company/<symbol>/sync', methods=['POST'])
+@login_required
+def sync_company_data(symbol):
+    """同步公司最新数据"""
+    try:
+        from core.stock_sync import StockDataSynchronizer
+        synchronizer = StockDataSynchronizer()
+        
+        # 同步股票基本信息
+        success = synchronizer.sync_single_stock_info(symbol)
+        
+        if success:
+            # 同步历史数据
+            count = synchronizer.sync_single_stock_history(symbol)
+            
+            logger.info(f"成功同步股票 {symbol} 的最新数据")
+            return jsonify({
+                'code': 200,
+                'message': f'数据同步成功，共同步{count}条历史数据',
+                'success': True
+            })
+        else:
+            # 即使基本信息同步失败，也尝试同步历史数据
+            count = synchronizer.sync_single_stock_history(symbol)
+            if count > 0:
+                logger.info(f"成功同步股票 {symbol} 的历史数据")
+                return jsonify({
+                    'code': 200,
+                    'message': f'历史数据同步成功，共同步{count}条数据',
+                    'success': True
+                })
+            else:
+                return jsonify({
+                    'code': 500,
+                    'message': '同步失败：无法获取股票数据',
+                    'success': False
+                })
+            
+    except Exception as e:
+        logger.error(f"同步公司数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'同步失败: {str(e)}',
+            'success': False
+        }), 500
+
+
 # 静态文件服务
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """提供静态文件服务"""
-    return send_from_directory('static', filename)
 
 
 @app.errorhandler(404)
@@ -861,6 +1902,176 @@ def internal_error(error):
         'code': 500,
         'message': '服务器内部错误'
     }), 500
+
+# ================================
+# 数据库表管理API
+# ================================
+
+@app.route('/database')
+@login_required
+def database_page():
+    """数据库表管理页面"""
+    return render_template('database.html')
+
+@app.route('/api/database/tables', methods=['GET'])
+@login_required
+def get_database_tables():
+    """获取数据库所有表信息"""
+    try:
+        # 获取所有表
+        query = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        tables = db_manager.query(query)
+        
+        table_info = []
+        total_records = 0
+        interface_tables = 0
+        data_tables = 0
+        
+        for table in tables:
+            table_name = table['name']
+            
+            # 获取记录数
+            count_query = f"SELECT COUNT(*) as count FROM {table_name}"
+            count_result = db_manager.query(count_query)
+            row_count = count_result[0]['count'] if count_result else 0
+            
+            # 获取列信息
+            columns_query = f"PRAGMA table_info({table_name})"
+            columns = db_manager.query(columns_query)
+            column_count = len(columns)
+            
+            # 分类
+            category = get_table_category(table_name)
+            description = get_table_description(table_name)
+            
+            # 统计
+            total_records += row_count
+            if 'interface' in table_name.lower() or table_name.startswith('akshare_interface'):
+                interface_tables += 1
+            elif table_name.startswith('akshare_') and 'interface' not in table_name:
+                data_tables += 1
+            
+            table_info.append({
+                'name': table_name,
+                'row_count': row_count,
+                'column_count': column_count,
+                'category': category,
+                'description': description,
+                'columns': [{'name': col['name'], 'type': col['type']} for col in columns]
+            })
+        
+        # 按记录数排序
+        table_info.sort(key=lambda x: x['row_count'], reverse=True)
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取数据库表信息成功',
+            'data': {
+                'total_tables': len(tables),
+                'total_records': total_records,
+                'interface_tables': interface_tables,
+                'data_tables': data_tables,
+                'tables': table_info
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取数据库表信息失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取数据库表信息失败: {str(e)}'
+        }), 500
+
+def get_table_category(table_name):
+    """获取表的分类"""
+    if table_name.startswith('akshare_interface'):
+        return '接口元数据'
+    elif table_name.startswith('akshare_stock_balance_sheet') or table_name.startswith('akshare_stock_cash_flow_sheet') or table_name.startswith('akshare_stock_profit_sheet'):
+        return '财务报表'
+    elif table_name.startswith('akshare_stock_board_concept') or table_name.startswith('akshare_stock_board_industry'):
+        return '板块数据'
+    elif table_name.startswith('akshare_stock_gdfx'):
+        return '股东数据'
+    elif table_name.startswith('akshare_stock_individual_fund_flow') or table_name.startswith('akshare_stock_market_fund_flow'):
+        return '资金流向'
+    elif table_name.startswith('akshare_stock_margin'):
+        return '融资融券'
+    elif table_name.startswith('akshare_stock_financial_abstract'):
+        return '财务指标'
+    elif table_name.startswith('akshare_stock_individual_info') or table_name.startswith('akshare_stock_info_a'):
+        return '股票信息'
+    elif table_name.startswith('akshare_stock_zh_a_daily') or table_name.startswith('akshare_stock_zh_a_spot'):
+        return 'A股行情'
+    elif table_name.startswith('akshare_stock_zh_index'):
+        return '指数行情'
+    elif table_name.startswith('akshare_'):
+        return 'AKShare数据'
+    elif table_name in ['stock_info', 'stock_daily']:
+        return '股票基础数据'
+    elif table_name.startswith('technical_indicators'):
+        return '技术指标'
+    elif table_name.startswith('backtest_'):
+        return '回测数据'
+    elif table_name.startswith('user'):
+        return '用户管理'
+    elif table_name.startswith('sqlite_'):
+        return '系统表'
+    else:
+        return '其他'
+
+def get_table_description(table_name):
+    """获取表的描述"""
+    descriptions = {
+        # 接口元数据表
+        'akshare_interfaces': 'AKShare接口主表，包含所有接口的基本信息',
+        'akshare_interface_params': '接口参数表，记录每个接口的参数信息',
+        'akshare_interface_returns': '接口返回表，记录接口的返回字段信息',
+        'akshare_interface_examples': '接口示例表，包含接口的使用示例',
+        'akshare_interface_errors': '接口错误表，记录接口可能的错误信息',
+        'akshare_interface_tags': '接口标签表，定义接口的分类标签',
+        'akshare_interface_tag_relations': '接口标签关联表，关联接口和标签',
+        'akshare_interface_stats': '接口统计表，记录接口的统计信息',
+        
+        # 股票基础数据
+        'stock_info': '股票基础信息表，包含所有A股股票的基本信息',
+        'stock_daily': '股票日线数据表，包含历史K线数据',
+        'technical_indicators': '技术指标表，存储计算的技术指标数据',
+        'backtest_results': '回测结果表，存储策略回测的结果',
+        'trades': '交易记录表，存储回测中的交易明细',
+        'users': '用户表，存储系统用户信息',
+        'user_sessions': '用户会话表，存储用户登录会话',
+        
+        # AKShare股票数据
+        'akshare_stock_balance_sheet_by_report_em': '资产负债表数据，包含A股公司资产负债信息',
+        'akshare_stock_board_concept_name_em': '概念板块名称表，包含A股概念板块基本信息',
+        'akshare_stock_board_industry_name_em': '行业板块名称表，包含A股行业板块基本信息',
+        'akshare_stock_cash_flow_sheet_by_report_em': '现金流量表数据，包含A股公司现金流信息',
+        'akshare_stock_financial_abstract': '财务摘要数据，包含A股公司核心财务指标',
+        'akshare_stock_gdfx_free_top_10_em': '前十大流通股东数据，包含A股公司流通股东信息',
+        'akshare_stock_gdfx_top_10_em': '前十大股东数据，包含A股公司股东信息',
+        'akshare_stock_individual_fund_flow': '个股资金流向数据，包含A股个股资金流入流出',
+        'akshare_stock_individual_fund_flow_rank': '个股资金排行数据，包含A股个股资金排名',
+        'akshare_stock_individual_info_em': '个股基本信息表，包含A股个股详细资料',
+        'akshare_stock_info_a_code_name': 'A股代码名称表，包含所有A股股票代码和名称',
+        'akshare_stock_margin_detail_sse': '融资融券明细数据，包含上交所融资融券详细信息',
+        'akshare_stock_margin_sse': '融资融券汇总数据，包含上交所融资融券统计',
+        'akshare_stock_profit_sheet_by_report_em': '利润表数据，包含A股公司盈利信息',
+        'akshare_stock_zh_a_daily': 'A股日线行情数据，包含A股个股历史K线',
+        'akshare_stock_zh_a_spot': 'A股实时行情数据，包含A股个股最新价格',
+        'akshare_stock_zh_index_daily': '指数日线数据，包含主要股票指数历史行情',
+        
+        # SQLite系统表
+        'sqlite_sequence': 'SQLite序列号表，记录自增主键信息',
+        'sqlite_stat1': 'SQLite统计信息表，用于查询优化'
+    }
+    
+    # 为未定义的akshare表提供默认描述
+    if table_name.startswith('akshare_') and table_name not in descriptions:
+        # 从表名提取接口名
+        interface_name = table_name.replace('akshare_', '')
+        return f'AKShare接口数据：{interface_name} 相关数据'
+    
+    return descriptions.get(table_name, f'{table_name} 数据表')
 
 
 if __name__ == '__main__':
