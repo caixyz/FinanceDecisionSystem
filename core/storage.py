@@ -153,12 +153,25 @@ class DatabaseManager:
             df['symbol'] = symbol
             df = df.reset_index()
             
-            # 选择需要的列
+            # 选择需要的列并重命名确保字段匹配
             columns = ['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'turnover']
             df = df[[col for col in columns if col in df.columns]]
             
+            # 确保日期格式正确
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+            
             with sqlite3.connect(self.db_path) as conn:
-                # 使用 REPLACE 来处理重复数据
+                # 先删除已存在的记录，避免唯一性约束冲突
+                if not df.empty:
+                    dates = df['date'].tolist()
+                    placeholders = ','.join(['?' for _ in dates])
+                    conn.execute(
+                        f"DELETE FROM stock_daily WHERE symbol = ? AND date IN ({placeholders})",
+                        [symbol] + dates
+                    )
+                
+                # 插入新数据
                 df.to_sql('stock_daily', conn, if_exists='append', index=False, method='multi')
                 
             logger.info(f"成功保存股票 {symbol} 的 {len(df)} 条日线数据")
@@ -314,6 +327,35 @@ class DatabaseManager:
             logger.error(f"保存回测结果失败: {e}")
             raise
     
+    def get_stock_info(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """获取股票基本信息"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('''
+                    SELECT symbol, name, industry, market_cap, pe_ratio, pb_ratio, close, updated_at
+                    FROM stock_info
+                    WHERE symbol = ?
+                ''', (symbol,))
+                
+                row = cursor.fetchone()
+                if row:
+                    stock = dict(row)
+                    # 处理可能的None值
+                    for key in ['market_cap', 'pe_ratio', 'pb_ratio', 'close']:
+                        if stock[key] is None:
+                            stock[key] = 0.0
+                    return stock
+                return None
+                
+        except Exception as e:
+            logger.error(f"获取股票信息失败: {e}")
+            return None
+
+    def get_stock_data(self, symbol: str, start_date: str = None, end_date: str = None, limit: int = None) -> pd.DataFrame:
+        """获取股票历史数据（兼容API调用的别名）"""
+        return self.get_stock_daily_data(symbol, start_date, end_date, limit)
+
     def get_stock_list(self) -> List[Dict[str, Any]]:
         """获取股票列表"""
         try:
@@ -339,6 +381,77 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"获取股票列表失败: {e}")
             return []
+
+    def query(self, sql: str, params: tuple = None) -> List[Dict[str, Any]]:
+        """执行SQL查询并返回结果列表
+        
+        Args:
+            sql: SQL查询语句
+            params: 查询参数元组
+            
+        Returns:
+            查询结果列表，每个元素为字典格式的行数据
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                if params:
+                    cursor.execute(sql, params)
+                else:
+                    cursor.execute(sql)
+                
+                rows = cursor.fetchall()
+                result = [dict(row) for row in rows]
+                
+                logger.debug(f"查询执行成功: {len(result)} 条记录")
+                return result
+                
+        except Exception as e:
+            logger.error(f"查询执行失败: {e}")
+            raise
+    
+    def get_connection(self):
+        """获取数据库连接
+        
+        Returns:
+            sqlite3.Connection: 数据库连接对象
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            return conn
+        except Exception as e:
+            logger.error(f"获取数据库连接失败: {e}")
+            raise
+    
+    def execute(self, sql: str, params: tuple = None) -> int:
+        """执行SQL语句（非查询操作）
+        
+        Args:
+            sql: SQL语句
+            params: 参数元组
+            
+        Returns:
+            int: 影响的行数
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if params:
+                    cursor.execute(sql, params)
+                else:
+                    cursor.execute(sql)
+                
+                conn.commit()
+                affected_rows = cursor.rowcount
+                logger.debug(f"SQL执行成功: {affected_rows} 行受影响")
+                return affected_rows
+                
+        except Exception as e:
+            logger.error(f"SQL执行失败: {e}")
+            raise
 
 
 class CacheManager:

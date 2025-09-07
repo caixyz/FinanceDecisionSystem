@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试中央提示功能</title>
+    <style>
+        /* 中央提示样式 */
+        .notification-center {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .notification-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>中央提示功能测试</h1>
+    <button class="btn" onclick="testProgress()">测试进度提示</button>
+    <button class="btn" onclick="testSuccess()">测试成功提示</button>
+    <button class="btn" onclick="testError()">测试错误提示</button>
+
+    <script>
+        // 中央提示功能
+        function showCenterNotification(type, title, message, showProgressBar = false, current = 0, total = 0, progressText = '') {
+            // 移除旧的提示
+            const oldOverlay = document.querySelector('.notification-overlay');
+            if (oldOverlay) {
+                oldOverlay.remove();
+            }
+
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.className = 'notification-overlay';
+            
+            // 创建中央提示框
+            const notification = document.createElement('div');
+            notification.className = 'notification-center';
+            
+            let content = '';
+            let icon = '';
+            let color = '';
+            
+            switch(type) {
+                case 'success':
+                    icon = '✅';
+                    color = '#28a745';
+                    break;
+                case 'error':
+                    icon = '❌';
+                    color = '#dc3545';
+                    break;
+                case 'warning':
+                    icon = '⚠️';
+                    color = '#ffc107';
+                    break;
+                default:
+                    icon = '⏳';
+                    color = '#007bff';
+            }
+
+            content = `
+                <div style="font-size: 2rem; margin-bottom: 1rem;">${icon}</div>
+                <h3 style="color: ${color}; margin-bottom: 1rem; font-size: 1.2rem;">${title}</h3>
+                <div style="margin-bottom: 1rem; white-space: pre-line; line-height: 1.6;">${message}</div>
+            `;
+
+            if (showProgressBar) {
+                const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+                content += `
+                    <div style="margin: 1rem 0;">
+                        <div style="width: 100%; height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); transition: width 0.3s ease; border-radius: 4px;"></div>
+                        </div>
+                        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+                            ${progressText} (${percentage}%)
+                        </div>
+                    </div>
+                `;
+            }
+
+            content += `
+                <button onclick="this.closest('.notification-overlay').remove()" 
+                        style="background: ${color}; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; margin-top: 1rem;">
+                    关闭
+                </button>
+            `;
+
+            notification.innerHTML = content;
+            overlay.appendChild(notification);
+            document.body.appendChild(overlay);
+
+            // 点击遮罩关闭
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    overlay.remove();
+                }
+            });
+
+            return overlay;
+        }
+
+        function testProgress() {
+            showCenterNotification('info', '数据同步中', '正在同步股票数据，请稍候...', true, 50, 100, '正在处理中');
+        }
+
+        function testSuccess() {
+            showCenterNotification('success', '同步成功', '✅ 数据同步完成！\n共处理了100只股票数据');
+        }
+
+        function testError() {
+            showCenterNotification('error', '同步失败', '❌ 网络连接异常\n请检查网络连接后重试');
+        }
+    </script>
+</body>
+</html>

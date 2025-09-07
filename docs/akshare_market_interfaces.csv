@@ -1,0 +1,10 @@
+﻿接口名称,类型
+futures_zh_daily_sina,市场数据
+futures_spot_price_daily,市场数据
+fund_em_fund_name,市场数据
+fund_em_open_fund_daily,市场数据
+fund_em_etf_fund_daily,市场数据
+bond_zh_cov,市场数据
+bond_zh_hs_daily,市场数据
+fx_pair_quote,市场数据
+futures_glob_sina,市场数据

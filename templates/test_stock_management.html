@@ -15,11 +15,11 @@
             font-family: 'Microsoft YaHei', Arial, sans-serif;
             line-height: 1.6;
             background-color: #f8f9fa;
-            padding: 20px;
+            padding: 10px;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 95%;
             margin: 0 auto;
         }
 
@@ -51,40 +51,104 @@
 
         .form-group input, .form-group select {
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.5rem;
             border: 1px solid #ddd;
             border-radius: 5px;
-            font-size: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 0.5rem;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .industry-group {
+            flex: 0.5;
+            min-width: 75px;
+        }
+
+        .industry-select {
+            width: 100%;
         }
 
         .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .search-form {
             background-color: #f8f9fa;
-            padding: 1.5rem;
+            padding: 0.8rem;
             border-radius: 8px;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
 
         .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 0.75rem 1.5rem;
+            padding: 0.5rem 1rem;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 1rem;
+            font-size: 0.85rem;
             transition: transform 0.2s;
+            white-space: nowrap;
         }
 
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+            margin: 0 2px;
+        }
+
+        .stock-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .stock-table th,
+        .stock-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .stock-table th {
+            background-color: #f8f9fa;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .stock-table th:hover {
+            background-color: #e9ecef;
+        }
+
+        .stock-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        /* ST股票样式 */
+        .st-stock {
+            background-color: #ffe6e6 !important;
+        }
+
+        .st-stock:hover {
+            background-color: #ffcccc !important;
+        }
+
+        .st-stock td:first-child {
+            color: #d32f2f;
+            font-weight: bold;
         }
 
         .result-container {
@@ -134,6 +198,107 @@
             transform: translateY(-3px);
             box-shadow: 0 4px 15px rgba(0,0,0,0.15);
         }
+
+        /* 中央通知样式 */
+        .notification-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .notification-center {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: notificationSlideIn 0.3s ease-out;
+        }
+
+        @keyframes notificationSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .notification-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .notification-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .notification-message {
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .notification-progress {
+            margin: 1rem 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .notification-close {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .notification-close:hover {
+            transform: translateY(-2px);
+        }
+
+        /* 通知类型样式 */
+        .notification-center.success .notification-icon { color: #28a745; }
+        .notification-center.error .notification-icon { color: #dc3545; }
+        .notification-center.warning .notification-icon { color: #ffc107; }
+        .notification-center.info .notification-icon { color: #17a2b8; }
 
         .stock-header {
             display: flex;
@@ -300,29 +465,38 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏦 金融决策系统 - 股票数据管理测试</h1>
-        <p>基于 AKShare 的智能股票分析平台</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <h1>🏦 金融决策系统 - 股票数据管理测试</h1>
+                <p>基于 AKShare 的智能股票分析平台</p>
+            </div>
+            <div>
+                <a href="/" class="btn" style="margin-right: 0.5rem;">🏠 返回首页</a>
+                <a href="/dashboard" class="btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">📊 仪表盘</a>
+            </div>
+        </div>
         
         <!-- 股票数据管理 -->
         <div class="card">
             <h2>💾 股票数据管理</h2>
             <div class="search-form">
                 <div class="form-row">
-                    <div class="form-group">
+                    <div class="form-group" style="flex: 2; min-width: 200px;">
                         <label for="searchKeyword">股票代码或名称:</label>
                         <input type="text" id="searchKeyword" placeholder="输入股票代码或名称" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group industry-group">
                         <label for="searchIndustry">行业:</label>
-                        <select id="searchIndustry">
+                        <select id="searchIndustry" class="industry-select">
                             <option value="">全部行业</option>
                         </select>
                     </div>
-                </div>
-                <div class="form-row">
-                    <button class="btn" onclick="searchStocks()" style="margin-top: 10px;">搜索</button>
-                    <button class="btn" onclick="resetSearchForm()" style="margin-top: 10px; margin-left: 10px;">重置</button>
-                    <button class="btn" onclick="showAdvancedSearch()" style="margin-top: 10px; margin-left: 10px;">更多</button>
+                    <button class="btn" onclick="searchStocks()">🔍 搜索</button>
+                    <button class="btn" onclick="resetSearchForm()">🔄 重置</button>
+                    <button class="btn" onclick="showAdvancedSearch()">⚙️ 高级</button>
+                    <button class="btn" onclick="syncStockList()" title="同步股票列表">📋 同步列表</button>
+                    <button class="btn" onclick="syncStockHistory()" title="同步历史数据">📊 同步历史</button>
+                    <button class="btn" onclick="syncStockLatest()" title="同步最新数据">📈 同步最新</button>
                 </div>
             </div>
             
@@ -372,19 +546,12 @@
                         </div>
                     </div>
                     <div class="form-row">
-                        <button class="btn" onclick="searchStocksWithAdvanced()" style="margin-top: 10px;">搜索</button>
-                        <button class="btn" onclick="resetAdvancedSearchForm()" style="margin-top: 10px; margin-left: 10px;">重置</button>
+                        <button class="btn" onclick="searchStocksWithAdvanced()">搜索</button>
+                        <button class="btn" onclick="resetAdvancedSearchForm()">重置</button>
                     </div>
                 </div>
             </div>
             <div id="searchResult" class="result-container"></div>
-            
-            <div style="margin-top: 2rem;">
-                <h3>数据同步</h3>
-                <button class="btn" onclick="syncStockList()" style="margin-right: 10px;">🔄 同步股票列表</button>
-                <button class="btn" onclick="syncStockHistory()" style="margin-right: 10px;">📚 同步历史数据</button>
-                <button class="btn" onclick="syncStockLatest()">⚡ 同步最新数据</button>
-            </div>
             <div id="syncResult" class="result-container"></div>
         </div>
     </div>
@@ -399,11 +566,11 @@
         }
 
         function showError(containerId, message) {
-            document.getElementById(containerId).innerHTML = `<div class="error">❌ ${message}</div>`;
+            showCenterNotification('error', '操作失败', message);
         }
 
         function showSuccess(containerId, message) {
-            document.getElementById(containerId).innerHTML = `<div class="success">✅ ${message}</div>`;
+            showCenterNotification('success', '操作成功', message);
         }
         
         // 高级搜索弹窗功能
@@ -761,6 +928,7 @@
                             <th onclick="sortTable('pe_ratio')" class="${currentSortBy === 'pe_ratio' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">市盈率</th>
                             <th onclick="sortTable('pb_ratio')" class="${currentSortBy === 'pb_ratio' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">市净率</th>
                             <th onclick="sortTable('updated_at')" class="${currentSortBy === 'updated_at' ? 'sort-' + currentSortOrder.toLowerCase() : ''}">更新时间</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -796,8 +964,11 @@
                     updatedAtDisplay = new Date(stock.updated_at).toLocaleDateString('zh-CN');
                 }
                 
+                const isSTStock = stock.name && stock.name.includes('ST');
+                const rowClass = isSTStock ? 'st-stock' : '';
+                
                 html += `
-                    <tr>
+                    <tr class="${rowClass}">
                         <td>${stock.symbol}</td>
                         <td>${stock.name}</td>
                         <td>${stock.industry || ''}</td>
@@ -806,6 +977,10 @@
                         <td>${peRatioDisplay || ''}</td>
                         <td>${pbRatioDisplay || ''}</td>
                         <td>${updatedAtDisplay || ''}</td>
+                        <td>
+                            <button class="btn btn-small" onclick="analyzeHistory('${stock.symbol}', '${stock.name}')" title="历史分析">📊 历史分析</button>
+                            <button class="btn btn-small" onclick="analyzeCompany('${stock.symbol}', '${stock.name}')" title="公司分析">🏢 公司分析</button>
+                        </td>
                     </tr>
                 `;
             });
@@ -913,11 +1088,21 @@
 
         // 数据同步功能
         async function syncStockList() {
-            if (!confirm('确定要同步股票列表吗？这将更新所有股票的基本信息。')) {
+            const confirmMessage = `⚠️ 风险提示
+
+同步股票列表将执行以下操作：
+• 获取最新的股票基本信息
+• 更新股票所属行业分类
+• 更新市场板块信息
+• 可能影响现有分析结果
+
+是否继续同步？`;
+            
+            if (!confirm(confirmMessage)) {
                 return;
             }
             
-            showLoading('syncResult');
+            showCenterNotification('info', '数据同步', '正在同步股票列表...', true, 0, 100, '正在初始化');
             
             try {
                 const response = await fetch(`${API_BASE}/stocks/sync/list`, {
@@ -930,21 +1115,33 @@
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showSuccess('syncResult', `股票列表同步成功，共同步 ${result.data.synced_count} 只股票`);
+                    showCenterNotification('success', '同步完成', 
+                        `✅ 股票列表同步完成！
+共同步: ${result.data.synced_count} 只股票`);
                 } else {
-                    showError('syncResult', result.message);
+                    showCenterNotification('error', '同步失败', result.message);
                 }
             } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
+                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
             }
         }
         
         async function syncStockHistory() {
-            if (!confirm('确定要同步所有股票的历史数据吗？这可能需要较长时间。')) {
+            const confirmMessage = `⚠️ 风险提示
+
+同步历史数据将执行以下操作：
+• 获取过去365天的完整历史数据
+• 包含开盘价、收盘价、最高价、最低价、成交量
+• 数据量较大，可能需要较长时间
+• 会覆盖现有历史数据
+
+是否继续同步？`;
+            
+            if (!confirm(confirmMessage)) {
                 return;
             }
             
-            showLoading('syncResult');
+            showCenterNotification('info', '数据同步', '正在同步历史数据...', true, 0, 100, '正在初始化');
             
             try {
                 const response = await fetch(`${API_BASE}/stocks/sync/history`, {
@@ -962,18 +1159,35 @@
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showSuccess('syncResult', 
-                        `历史数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
+                    showCenterNotification('success', '同步完成', 
+                        `✅ 历史数据同步完成！
+总计: ${result.data.total}只股票
+成功: ${result.data.success}只
+失败: ${result.data.failed}只`);
                 } else {
-                    showError('syncResult', result.message);
+                    showCenterNotification('error', '同步失败', result.message);
                 }
             } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
+                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
             }
         }
         
         async function syncStockLatest() {
-            showLoading('syncResult');
+            const confirmMessage = `⚠️ 风险提示
+
+同步最新数据将执行以下操作：
+• 增量更新最近30天的股票数据
+• 只获取缺失的最新价格数据
+• 速度较快，通常几分钟完成
+• 仅更新价格数据，不影响股票基本信息
+
+是否继续同步？`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            showCenterNotification('info', '数据同步', '正在同步最新数据...', true, 0, 100, '正在初始化');
             
             try {
                 const response = await fetch(`${API_BASE}/stocks/sync/latest`, {
@@ -991,15 +1205,99 @@
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showSuccess('syncResult', 
-                        `最新数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
+                    showCenterNotification('success', '同步完成', 
+                        `✅ 最新数据同步完成！
+总计: ${result.data.total}只股票
+成功: ${result.data.success}只
+失败: ${result.data.failed}只`);
                 } else {
-                    showError('syncResult', result.message);
+                    showCenterNotification('error', '同步失败', result.message);
                 }
             } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
+                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
             }
         }
+        // 历史数据分析
+        function analyzeHistory(symbol, name) {
+            window.location.href = `/analysis/history/${symbol}?name=${encodeURIComponent(name)}`;
+        }
+
+        // 公司分析
+        function analyzeCompany(symbol, name) {
+            window.location.href = `/analysis/company/${symbol}?name=${encodeURIComponent(name)}`;
+        }
+
+        // 中央通知功能
+        function showCenterNotification(type, title, message, showProgress = false, current = 0, total = 100, progressText = '') {
+            const overlay = document.getElementById('notificationOverlay');
+            const notification = document.getElementById('notificationCenter');
+            
+            // 设置通知类型和样式
+            notification.className = `notification-center ${type}`;
+            
+            // 设置图标
+            let icon = 'ℹ️';
+            switch(type) {
+                case 'success': icon = '✅'; break;
+                case 'error': icon = '❌'; break;
+                case 'warning': icon = '⚠️'; break;
+                case 'info': icon = 'ℹ️'; break;
+            }
+            
+            // 更新内容
+            document.getElementById('notificationIcon').textContent = icon;
+            document.getElementById('notificationTitle').textContent = title;
+            document.getElementById('notificationMessage').textContent = message;
+            
+            // 处理进度条
+            const progressContainer = document.getElementById('notificationProgress');
+            if (showProgress) {
+                const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+                document.getElementById('progressFill').style.width = `${percentage}%`;
+                document.getElementById('progressText').textContent = progressText || `${percentage}% (${current}/${total})`;
+                progressContainer.style.display = 'block';
+            } else {
+                progressContainer.style.display = 'none';
+            }
+            
+            // 显示通知
+            overlay.style.display = 'flex';
+            
+            // 如果不是进度条模式，3秒后自动关闭
+            if (!showProgress) {
+                setTimeout(() => {
+                    closeCenterNotification();
+                }, 3000);
+            }
+        }
+
+        function closeCenterNotification() {
+            const overlay = document.getElementById('notificationOverlay');
+            overlay.style.display = 'none';
+        }
+
+        // 点击遮罩关闭通知
+        document.getElementById('notificationOverlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCenterNotification();
+            }
+        });
     </script>
+
+    <!-- 中央通知HTML结构 -->
+    <div id="notificationOverlay" class="notification-overlay">
+        <div id="notificationCenter" class="notification-center">
+            <div id="notificationIcon" class="notification-icon">ℹ️</div>
+            <div id="notificationTitle" class="notification-title">提示</div>
+            <div id="notificationMessage" class="notification-message">操作完成</div>
+            <div id="notificationProgress" class="notification-progress" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="progressText" class="progress-text">0%</div>
+            </div>
+            <button class="notification-close" onclick="closeCenterNotification()">确定</button>
+        </div>
+    </div>
 </body>
 </html>

@@ -87,11 +87,45 @@
             cursor: pointer;
             font-size: 1rem;
             transition: transform 0.2s;
+            position: relative;
+            overflow: hidden;
         }
 
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            background: linear-gradient(135deg, #ccc 0%, #999 100%);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn.loading {
+            color: transparent;
+        }
+
+        .btn.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spinner 0.8s linear infinite;
+        }
+
+        @keyframes spinner {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .result-container {
@@ -131,6 +165,79 @@
             padding: 1rem;
             border-radius: 5px;
             text-align: center;
+        }
+
+        /* 进度条样式 */
+        .progress-container {
+            margin: 1rem 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .sync-status {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 5px;
+        }
+
+        /* 中央提示样式 */
+        .notification-center {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .notification-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+            margin: 1rem 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .sync-status h4 {
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .sync-status p {
+            margin: 0.25rem 0;
+            font-size: 0.9rem;
+            color: #666;
         }
     </style>
 </head>
@@ -311,107 +418,382 @@
             container.innerHTML = html;
         }
 
-        // 数据同步功能
+        // 数据同步功能 - 带反重复点击和进度条
+        let syncInProgress = false;
+        let currentSyncType = null;
+
+        // 进度条工具函数
+        function showProgress(containerId, current, total, message = '') {
+            const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+            const container = document.getElementById(containerId);
+            
+            let html = `
+                <div class="sync-status">
+                    <h4>📊 同步进度</h4>
+                    <p><strong>当前进度:</strong> ${percentage}% (${current}/${total})</p>
+                    ${message ? `<p><strong>状态:</strong> ${message}</p>` : ''}
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${percentage}%"></div>
+                        </div>
+                        <div class="progress-text">${percentage}% 完成</div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        // 设置按钮状态
+        function setSyncButtonState(disabled) {
+            const buttons = document.querySelectorAll('#stockManagementCard button[onclick*="sync"]');
+            buttons.forEach(button => {
+                button.disabled = disabled;
+                if (disabled) {
+                    button.classList.add('loading');
+                    button.style.opacity = '0.7';
+                } else {
+                    button.classList.remove('loading');
+                    button.style.opacity = '1';
+                }
+            });
+        }
+
+        // 股票列表同步
         async function syncStockList() {
-            if (!confirm('确定要同步股票列表吗？这将更新所有股票的基本信息。')) {
+            if (syncInProgress) {
+                alert('当前有同步任务正在进行，请等待完成后再试');
+                return;
+            }
+
+            const riskMessage = `⚠️ 风险提示
+
+同步股票列表将执行以下操作：
+• 更新所有股票的基本信息（代码、名称）
+• 同步更新市值、市盈率、市净率等财务数据
+• 此操作可能需要几分钟时间
+• 现有数据将被完整覆盖
+
+是否继续同步？`;
+            
+            if (!confirm(riskMessage)) {
                 return;
             }
             
-            showLoading('syncResult');
+            syncInProgress = true;
+            currentSyncType = 'stock_list';
+            setSyncButtonState(true);
+            
+            showProgress('syncResult', 0, 100, '正在初始化...');
             
             try {
+                // 先获取登录状态
+                const authCheck = await fetch('/api/auth/check', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (!authCheck.ok) {
+                    showError('syncResult', '请先登录系统后再进行数据同步');
+                    return;
+                }
+                
                 const response = await fetch(`${API_BASE}/stocks/sync/list`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    credentials: 'include'
                 });
                 
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showSuccess('syncResult', `股票列表同步成功，共同步 ${result.data.synced_count} 只股票`);
+                    showSuccess('syncResult', `✅ 股票列表同步成功！\n共同步 ${result.data.synced_count} 只股票\n包含完整财务数据`);
+                } else if (result.code === 401) {
+                    showError('syncResult', '登录已过期，请重新登录后再试');
                 } else {
-                    showError('syncResult', result.message);
+                    showError('syncResult', result.message || '同步失败，请稍后重试');
                 }
             } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
+                console.error('同步错误:', error);
+                showError('syncResult', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
+            } finally {
+                syncInProgress = false;
+                currentSyncType = null;
+                setSyncButtonState(false);
             }
         }
         
+        // 历史数据同步
         async function syncStockHistory() {
-            if (!confirm('确定要同步所有股票的历史数据吗？这可能需要较长时间。')) {
+            if (syncInProgress) {
+                showCenterNotification('warning', '提示', '当前有同步任务正在进行，请等待完成后再试');
+                return;
+            }
+
+            const riskMessage = `⚠️ 风险提示
+
+同步历史数据将执行以下操作：
+• 获取最近365天的完整股票历史数据
+• 数据量较大，可能需要较长时间（30-60分钟）
+• 会覆盖现有数据，请谨慎操作
+• 建议在网络稳定时执行
+
+是否继续同步？`;
+            
+            if (!confirm(riskMessage)) {
                 return;
             }
             
-            showLoading('syncResult');
+            syncInProgress = true;
+            currentSyncType = 'history';
+            setSyncButtonState(true);
+            
+            showCenterNotification('info', '数据同步', '正在准备数据...', true, 0, 100, '正在初始化');
             
             try {
+                // 先获取登录状态
+                const authCheck = await fetch('/api/auth/check', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (!authCheck.ok) {
+                    showCenterNotification('error', '登录失败', '请先登录系统后再进行数据同步');
+                    return;
+                }
+                
                 const response = await fetch(`${API_BASE}/stocks/sync/history`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                         days: 365,
-                        batch_size: 20,
-                        delay: 0.5
+                        batch_size: 15,
+                        delay: 1
                     })
                 });
                 
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showSuccess('syncResult', 
-                        `历史数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
+                    const total = result.data.total || 0;
+                    const success = result.data.success || 0;
+                    const failed = result.data.failed || 0;
+                    
+                    showCenterNotification('success', '同步完成', 
+                        `✅ 历史数据同步完成！\n总计: ${total}只股票\n成功: ${success}只\n失败: ${failed}只`);
+                } else if (result.code === 401) {
+                    showCenterNotification('error', '登录过期', '登录已过期，请重新登录后再试');
                 } else {
-                    showError('syncResult', result.message);
+                    showCenterNotification('error', '同步失败', result.message || '同步失败，请稍后重试');
                 }
             } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
+                console.error('同步错误:', error);
+                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
+            } finally {
+                syncInProgress = false;
+                currentSyncType = null;
+                setSyncButtonState(false);
             }
         }
         
+        // 最新数据同步
         async function syncStockLatest() {
-            showLoading('syncResult');
+            if (syncInProgress) {
+                showCenterNotification('warning', '提示', '当前有同步任务正在进行，请等待完成后再试');
+                return;
+            }
+
+            const riskMessage = `⚠️ 风险提示
+
+同步最新数据将执行以下操作：
+• 增量更新最近30天的股票数据
+• 只获取缺失的最新价格数据
+• 速度较快，通常几分钟完成
+• 仅更新价格数据，不影响股票基本信息
+
+是否继续同步？`;
+            
+            if (!confirm(riskMessage)) {
+                return;
+            }
+            
+            syncInProgress = true;
+            currentSyncType = 'latest';
+            setSyncButtonState(true);
+            
+            // 立即显示中央进度提示
+            showCenterNotification('info', '数据同步', '正在检查数据...', true, 0, 100, '正在初始化');
             
             try {
+                // 先获取登录状态
+                const authCheck = await fetch('/api/auth/check', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (!authCheck.ok) {
+                    showCenterNotification('error', '登录失败', '请先登录系统后再进行数据同步');
+                    return;
+                }
+                
                 const response = await fetch(`${API_BASE}/stocks/sync/latest`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                         days: 30,
                         batch_size: 20,
-                        delay: 0.5
+                        delay: 2
                     })
                 });
                 
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showSuccess('syncResult', 
-                        `最新数据同步完成 - 总计: ${result.data.total}, 成功: ${result.data.success}, 失败: ${result.data.failed}`);
+                    const total = result.data.total || 0;
+                    const success = result.data.success || 0;
+                    const failed = result.data.failed || 0;
+                    
+                    showCenterNotification('success', '同步完成', 
+                        `✅ 最新数据同步完成！\n总计: ${total}只股票\n成功: ${success}只\n失败: ${failed}只`);
+                } else if (result.code === 401) {
+                    showCenterNotification('error', '登录过期', '登录已过期，请重新登录后再试');
                 } else {
-                    showError('syncResult', result.message);
+                    showCenterNotification('error', '同步失败', result.message || '同步失败，请稍后重试');
                 }
             } catch (error) {
-                showError('syncResult', `同步失败: ${error.message}`);
+                console.error('同步错误:', error);
+                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
+            } finally {
+                syncInProgress = false;
+                currentSyncType = null;
+                setSyncButtonState(false);
             }
         }
 
         // 其他功能函数（简化版本）
         async function analyzeStock() {
-            showError('analysisResult', '此功能在调试版本中不可用');
+            showCenterNotification('warning', '功能不可用', '此功能在调试版本中不可用');
         }
         
         async function runBacktest() {
-            showError('backtestResult', '此功能在调试版本中不可用');
+            showCenterNotification('warning', '功能不可用', '此功能在调试版本中不可用');
         }
         
         async function generateReport() {
-            showError('reportResult', '此功能在调试版本中不可用');
+            showCenterNotification('warning', '功能不可用', '此功能在调试版本中不可用');
+        }
+        // 中央提示功能
+        function showCenterNotification(type, title, message, showProgressBar = false, current = 0, total = 0, progressText = '') {
+            // 移除旧的提示
+            const oldOverlay = document.querySelector('.notification-overlay');
+            if (oldOverlay) {
+                oldOverlay.remove();
+            }
+
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.className = 'notification-overlay';
+            
+            // 创建中央提示框
+            const notification = document.createElement('div');
+            notification.className = 'notification-center';
+            
+            let content = '';
+            let icon = '';
+            let color = '';
+            
+            switch(type) {
+                case 'success':
+                    icon = '✅';
+                    color = '#28a745';
+                    break;
+                case 'error':
+                    icon = '❌';
+                    color = '#dc3545';
+                    break;
+                case 'warning':
+                    icon = '⚠️';
+                    color = '#ffc107';
+                    break;
+                default:
+                    icon = '⏳';
+                    color = '#007bff';
+            }
+
+            content = `
+                <div style="font-size: 2rem; margin-bottom: 1rem;">${icon}</div>
+                <h3 style="color: ${color}; margin-bottom: 1rem; font-size: 1.2rem;">${title}</h3>
+                <div style="margin-bottom: 1rem; white-space: pre-line; line-height: 1.6;">${message}</div>
+            `;
+
+            if (showProgressBar) {
+                const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+                content += `
+                    <div style="margin: 1rem 0;">
+                        <div style="width: 100%; height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); transition: width 0.3s ease; border-radius: 4px;"></div>
+                        </div>
+                        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+                            ${progressText} (${percentage}%)
+                        </div>
+                    </div>
+                `;
+            }
+
+            content += `
+                <button onclick="this.closest('.notification-overlay').remove()" 
+                        style="background: ${color}; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; margin-top: 1rem;">
+                    关闭
+                </button>
+            `;
+
+            notification.innerHTML = content;
+            overlay.appendChild(notification);
+            document.body.appendChild(overlay);
+
+            // 点击遮罩关闭
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    overlay.remove();
+                }
+            });
+
+            return overlay;
+        }
+
+        // 修改原有的提示函数
+        function showProgress(elementId, current, total, text) {
+            const notification = showCenterNotification('info', '数据同步中', '正在同步股票数据，请稍候...', true, current, total, text);
+            return notification;
+        }
+
+        function showSuccess(elementId, message) {
+            showCenterNotification('success', '同步成功', message);
+        }
+
+        function showError(elementId, message) {
+            showCenterNotification('error', '同步失败', message);
+        }
+
+        // 其他功能函数（简化版本）
+        async function analyzeStock() {
+            showCenterNotification('warning', '功能不可用', '此功能在调试版本中不可用');
+        }
+        
+        async function runBacktest() {
+            showCenterNotification('warning', '功能不可用', '此功能在调试版本中不可用');
+        }
+        
+        async function generateReport() {
+            showCenterNotification('warning', '功能不可用', '此功能在调试版本中不可用');
         }
     </script>
 </body>

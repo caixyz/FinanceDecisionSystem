@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公司分析 - {{ company.name or company.symbol }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .company-info h1 {
+            font-size: 2.5rem;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .company-symbol {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+
+        .company-industry {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            color: #7f8c8d;
+            z-index: 1000;
+        }
+
+        .message-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            z-index: 1001;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            animation: fadeInOut 3s ease-in-out;
+        }
+
+        .message-overlay.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 2px solid #c62828;
+        }
+
+        .message-overlay.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 2px solid #2e7d32;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 20px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面头部 -->
+        <div class="header">
+            <div class="company-info">
+                <h1>{{ company.name or '公司分析' }}</h1>
+                <div class="company-symbol">股票代码: {{ company.symbol }}</div>
+                <div class="company-industry">{{ company.industry or '未知行业' }}</div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="syncCompanyData()">
+                    <i class="fas fa-sync"></i> 同步最新数据
+                </button>
+                <a href="/test_stock_management" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> 返回列表
+                </a>
+            </div>
+        </div>
+
+        <!-- 关键指标 -->
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value">¥{{ "%.2f"|format(company.close or 0) }}</div>
+                <div class="stat-label">最新股价</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ "%.2f"|format(company.pe_ratio or 0) }}</div>
+                <div class="stat-label">市盈率</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ "%.2f"|format(company.pb_ratio or 0) }}</div>
+                <div class="stat-label">市净率</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ "%.0f"|format((company.market_cap or 0)/100000000) }}亿</div>
+                <div class="stat-label">总市值</div>
+            </div>
+        </div>
+
+        <!-- 分析图表 -->
+        <div class="dashboard">
+            <!-- 股价走势图 -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-chart-line"></i>
+                    股价走势
+                </div>
+                <div class="chart-container">
+                    <canvas id="priceChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 成交量图表 -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-chart-bar"></i>
+                    成交量分析
+                </div>
+                <div class="chart-container">
+                    <canvas id="volumeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 技术指标 -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-chart-area"></i>
+                    技术指标
+                </div>
+                <div class="chart-container">
+                    <canvas id="indicatorChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 财务数据 -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-table"></i>
+                    财务数据
+                </div>
+                <table class="data-table" id="financialTable">
+                    <thead>
+                        <tr>
+                            <th>指标</th>
+                            <th>数值</th>
+                            <th>行业平均</th>
+                            <th>排名</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>市盈率</td>
+                            <td>{{ "%.2f"|format(company.pe_ratio or 0) }}</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>市净率</td>
+                            <td>{{ "%.2f"|format(company.pb_ratio or 0) }}</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>总市值</td>
+                            <td>{{ "%.0f"|format((company.market_cap or 0)/100000000) }}亿</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div id="loading" class="loading" style="display: none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>正在同步数据...</p>
+        </div>
+
+        <!-- 消息区域 -->
+        <div id="messageArea"></div>
+    </div>
+
+    <script>
+        // 获取URL参数中的股票代码
+        function getSymbolFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            // 从URL路径中获取股票代码
+            const path = window.location.pathname;
+            const match = path.match(/\/analysis\/company\/([^\/]+)/);
+            return urlParams.get('symbol') || (match ? match[1] : '{{ company.symbol }}');
+        }
+
+        // 初始化图表
+        function initCharts() {
+            const symbol = getSymbolFromUrl();
+            loadStockData(symbol);
+        }
+
+        // 加载股票数据
+        async function loadStockData(symbol) {
+            try {
+                const response = await fetch(`/api/company/${symbol}/data`);
+                const data = await response.json();
+                
+                if (data.code === 200 || data.success) {
+                    renderCharts(data.data);
+                } else {
+                    showMessage(data.message || '加载数据失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+
+        // 渲染图表
+        function renderCharts(data) {
+            // 股价走势图
+            renderPriceChart(data.prices);
+            
+            // 成交量图表
+            renderVolumeChart(data.prices);
+            
+            // 技术指标图表
+            renderIndicatorChart(data.indicators);
+        }
+
+        // 股价走势图
+        function renderPriceChart(prices) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            const labels = prices.map(p => p.date);
+            const pricesData = prices.map(p => p.close);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '股价',
+                        data: pricesData,
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 成交量图表
+        function renderVolumeChart(prices) {
+            const ctx = document.getElementById('volumeChart').getContext('2d');
+            const labels = prices.map(p => p.date);
+            const volumes = prices.map(p => p.volume);
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '成交量',
+                        data: volumes,
+                        backgroundColor: 'rgba(17, 153, 142, 0.6)',
+                        borderColor: 'rgb(17, 153, 142)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 技术指标图表
+        function renderIndicatorChart(indicators) {
+            if (!indicators || indicators.length === 0) return;
+
+            const ctx = document.getElementById('indicatorChart').getContext('2d');
+            const labels = indicators.map(i => i.date);
+            
+            const datasets = [];
+            
+            // 检查MACD指标
+            if (indicators[0].macd !== undefined) {
+                datasets.push({
+                    label: 'MACD',
+                    data: indicators.map(i => i.macd),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    tension: 0.1
+                });
+            }
+            
+            // 检查是否有移动平均线指标
+            if (indicators[0].ma5 !== undefined) {
+                datasets.push({
+                    label: 'MA5',
+                    data: indicators.map(i => i.ma5),
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    tension: 0.1
+                });
+            }
+            
+            if (indicators[0].ma10 !== undefined) {
+                datasets.push({
+                    label: 'MA10',
+                    data: indicators.map(i => i.ma10),
+                    borderColor: 'rgb(255, 159, 64)',
+                    backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                    tension: 0.1
+                });
+            }
+            
+            if (indicators[0].ma20 !== undefined) {
+                datasets.push({
+                    label: 'MA20',
+                    data: indicators.map(i => i.ma20),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                    tension: 0.1
+                });
+            }
+
+            // 如果没有技术指标，显示收盘价作为参考
+            if (datasets.length === 0 && indicators[0].close !== undefined) {
+                datasets.push({
+                    label: '收盘价',
+                    data: indicators.map(i => i.close),
+                    borderColor: 'rgb(153, 102, 255)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                    tension: 0.1
+                });
+            }
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 同步公司数据
+        async function syncCompanyData() {
+            const symbol = getSymbolFromUrl();
+            const loading = document.getElementById('loading');
+            
+            loading.style.display = 'block';
+            
+            try {
+                const response = await fetch(`/api/company/${symbol}/sync`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('数据同步成功！正在刷新数据...', 'success');
+                    // 延迟后重新加载数据而不是刷新页面
+                    setTimeout(async () => {
+                        await reloadData();
+                        showMessage('数据已更新完成！', 'success');
+                    }, 1000);
+                } else {
+                    showMessage(result.message || '同步失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // 重新加载数据
+        async function reloadData() {
+            const symbol = getSymbolFromUrl();
+            try {
+                await loadStockData(symbol);
+            } catch (error) {
+                console.error('重新加载数据失败:', error);
+                showMessage('数据更新失败，请手动刷新页面', 'error');
+            }
+        }
+
+        // 显示消息（居中提示）
+        function showMessage(text, type) {
+            const existingMessage = document.querySelector('.message-overlay');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message-overlay ${type}`;
+            messageDiv.textContent = text;
+            document.body.appendChild(messageDiv);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 3000);
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史数据分析 - ${stock_name}(${symbol})</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .stock-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-item .label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-item .value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 2rem 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #c33;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.5rem;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .metric-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 0.5rem 0;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .trend-indicator {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .trend-up {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .trend-down {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .period-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            justify-content: center;
+        }
+
+        .period-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .period-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .period-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .back-btn {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="back-btn">
+        <a href="/test_stock_management" class="btn btn-secondary">← 返回股票列表</a>
+    </div>
+
+    <div class="header">
+        <h1>历史数据分析</h1>
+        <div class="subtitle" id="pageTitle">加载中...</div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>股票基本信息</h2>
+            <div class="stock-info" id="stockInfo">
+                <div class="loading">加载中</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>历史价格走势</h2>
+            <div class="period-selector">
+                <button class="period-btn active" data-period="1M">1个月</button>
+                <button class="period-btn" data-period="3M">3个月</button>
+                <button class="period-btn" data-period="6M">6个月</button>
+                <button class="period-btn" data-period="1Y">1年</button>
+                <button class="period-btn" data-period="ALL">全部</button>
+                <button class="period-btn" data-period="SINCE_FOUNDING">自成立</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>技术指标分析</h2>
+            <div class="analysis-grid" id="technicalAnalysis">
+                <div class="loading">计算技术指标中...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>统计分析</h2>
+            <div class="analysis-grid" id="statisticalAnalysis">
+                <div class="loading">计算统计数据中...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>历史数据表格</h2>
+            <div id="dataTable" style="overflow-x: auto;">
+                <div class="loading">加载历史数据中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // 获取URL参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const pathParts = window.location.pathname.split('/');
+        const symbol = pathParts[pathParts.length - 1];
+        const stockName = urlParams.get('name') || symbol;
+        
+        if (!symbol) {
+            document.body.innerHTML = '<div class="error">错误：未提供股票代码</div>';
+        }
+
+        const API_BASE = '/api';
+        let currentPeriod = '1M';
+        let priceData = [];
+        let chart = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置页面标题
+            document.getElementById('pageTitle').textContent = `${stockName} (${symbol})`;
+            
+            loadStockInfo();
+            loadHistoricalData();
+            
+            // 周期选择器事件
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentPeriod = this.dataset.period;
+                    
+                    // 如果选择"自成立以来的"，重新加载数据
+                    if (currentPeriod === 'SINCE_FOUNDING') {
+                        loadHistoricalData();
+                    } else {
+                        updateChart();
+                    }
+                });
+            });
+        });
+
+        async function loadStockInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/stocks/${symbol}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stock = result.data;
+                    const infoHtml = `
+                        <div class="info-item">
+                            <div class="label">股票代码</div>
+                            <div class="value">${stock.symbol}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="label">股票名称</div>
+                            <div class="value">${stock.name}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="label">当前价格</div>
+                            <div class="value">¥${stock.close ? stock.close.toFixed(2) : 'N/A'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="label">市值</div>
+                            <div class="value">${stock.market_cap ? (stock.market_cap / 100000000).toFixed(2) + '亿' : 'N/A'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="label">市盈率</div>
+                            <div class="value">${stock.pe_ratio ? stock.pe_ratio.toFixed(2) : 'N/A'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="label">行业</div>
+                            <div class="value">${stock.industry || 'N/A'}</div>
+                        </div>
+                    `;
+                    document.getElementById('stockInfo').innerHTML = infoHtml;
+                } else {
+                    document.getElementById('stockInfo').innerHTML = '<div class="error">加载股票信息失败</div>';
+                }
+            } catch (error) {
+                document.getElementById('stockInfo').innerHTML = `<div class="error">加载股票信息失败: ${error.message}</div>`;
+            }
+        }
+
+        async function loadHistoricalData() {
+            try {
+                // 默认获取1年数据
+                let response = await fetch(`${API_BASE}/stocks/${symbol}/history?period=1Y`);
+                let result = await response.json();
+                
+                if (result.code === 200 && result.data && result.data.history) {
+                    priceData = result.data.history;
+                    
+                    // 如果选择了"自成立以来的"，尝试获取更长时间的数据
+                    if (currentPeriod === 'SINCE_FOUNDING') {
+                        try {
+                            const longResponse = await fetch(`${API_BASE}/stocks/${symbol}/history?period=ALL`);
+                            const longResult = await longResponse.json();
+                            if (longResult.code === 200 && longResult.data && longResult.data.history) {
+                                priceData = longResult.data.history;
+                            }
+                        } catch (longError) {
+                            console.log('获取全部历史数据失败，使用1年数据:', longError.message);
+                        }
+                    }
+                    
+                    updateChart();
+                    calculateTechnicalAnalysis();
+                    calculateStatistics();
+                    renderDataTable();
+                } else {
+                    document.getElementById('technicalAnalysis').innerHTML = '<div class="error">加载历史数据失败</div>';
+                    document.getElementById('statisticalAnalysis').innerHTML = '<div class="error">加载历史数据失败</div>';
+                    document.getElementById('dataTable').innerHTML = '<div class="error">加载历史数据失败</div>';
+                }
+            } catch (error) {
+                document.getElementById('technicalAnalysis').innerHTML = `<div class="error">加载历史数据失败: ${error.message}</div>`;
+                document.getElementById('statisticalAnalysis').innerHTML = `<div class="error">加载历史数据失败: ${error.message}</div>`;
+                document.getElementById('dataTable').innerHTML = `<div class="error">加载历史数据失败: ${error.message}</div>`;
+            }
+        }
+
+        function updateChart() {
+            if (!priceData.length) return;
+
+            const filteredData = filterDataByPeriod(priceData, currentPeriod);
+            const labels = filteredData.map(d => new Date(d.date).toLocaleDateString('zh-CN'));
+            const prices = filteredData.map(d => d.close);
+            const volumes = filteredData.map(d => d.volume);
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '收盘价',
+                        data: prices,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${stockName} 价格走势 (${currentPeriod === 'SINCE_FOUNDING' ? '自成立以来的' : currentPeriod})`
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '价格 (元)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '日期'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function filterDataByPeriod(data, period) {
+            const now = new Date();
+            let startDate;
+            
+            switch (period) {
+                case '1M':
+                    startDate = new Date(now.setMonth(now.getMonth() - 1));
+                    break;
+                case '3M':
+                    startDate = new Date(now.setMonth(now.getMonth() - 3));
+                    break;
+                case '6M':
+                    startDate = new Date(now.setMonth(now.getMonth() - 6));
+                    break;
+                case '1Y':
+                    startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+                    break;
+                case 'ALL':
+                    return data;
+                case 'SINCE_FOUNDING':
+                    return data;
+            }
+            
+            return data.filter(d => new Date(d.date) >= startDate);
+        }
+
+        function calculateTechnicalAnalysis() {
+            if (!priceData.length) return;
+
+            const prices = priceData.map(d => d.close);
+            const volumes = priceData.map(d => d.volume);
+            
+            // 简单技术指标计算
+            const sma20 = calculateSMA(prices, 20);
+            const sma50 = calculateSMA(prices, 50);
+            const rsi = calculateRSI(prices, 14);
+            
+            const latestPrice = prices[prices.length - 1];
+            const latestSMA20 = sma20[sma20.length - 1];
+            const latestSMA50 = sma50[sma50.length - 1];
+            const latestRSI = rsi[rsi.length - 1];
+
+            const analysisHtml = `
+                <div class="metric-card">
+                    <div class="metric-label">移动平均线 (20日)</div>
+                    <div class="metric-value">${latestSMA20 ? latestSMA20.toFixed(2) : 'N/A'}</div>
+                    <div class="trend-indicator ${latestPrice > latestSMA20 ? 'trend-up' : 'trend-down'}">
+                        ${latestPrice > latestSMA20 ? '看涨' : '看跌'}
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">移动平均线 (50日)</div>
+                    <div class="metric-value">${latestSMA50 ? latestSMA50.toFixed(2) : 'N/A'}</div>
+                    <div class="trend-indicator ${latestPrice > latestSMA50 ? 'trend-up' : 'trend-down'}">
+                        ${latestPrice > latestSMA50 ? '看涨' : '看跌'}
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">RSI (14日)</div>
+                    <div class="metric-value">${latestRSI ? latestRSI.toFixed(2) : 'N/A'}</div>
+                    <div class="trend-indicator ${latestRSI > 70 ? 'trend-down' : latestRSI < 30 ? 'trend-up' : ''}">
+                        ${latestRSI > 70 ? '超买' : latestRSI < 30 ? '超卖' : '正常'}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('technicalAnalysis').innerHTML = analysisHtml;
+        }
+
+        function calculateStatistics() {
+            if (!priceData.length) return;
+
+            const prices = priceData.map(d => d.close);
+            const volumes = priceData.map(d => d.volume);
+            
+            const stats = {
+                count: prices.length,
+                min: Math.min(...prices),
+                max: Math.max(...prices),
+                avg: prices.reduce((a, b) => a + b, 0) / prices.length,
+                stdDev: calculateStandardDeviation(prices),
+                totalVolume: volumes.reduce((a, b) => a + b, 0)
+            };
+
+            const statsHtml = `
+                <div class="metric-card">
+                    <div class="metric-label">最高价</div>
+                    <div class="metric-value">¥${stats.max.toFixed(2)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">最低价</div>
+                    <div class="metric-value">¥${stats.min.toFixed(2)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">平均价</div>
+                    <div class="metric-value">¥${stats.avg.toFixed(2)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">标准差</div>
+                    <div class="metric-value">${stats.stdDev.toFixed(2)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">总交易量</div>
+                    <div class="metric-value">${(stats.totalVolume / 1000000).toFixed(2)}M</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">数据天数</div>
+                    <div class="metric-value">${stats.count}</div>
+                </div>
+            `;
+            
+            document.getElementById('statisticalAnalysis').innerHTML = statsHtml;
+        }
+
+        function renderDataTable() {
+            if (!priceData.length) return;
+
+            // 按日期排序，最新的在前面
+            const sortedData = [...priceData].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            // 计算涨跌幅
+            const dataWithChange = sortedData.map((day, index) => {
+                if (index < sortedData.length - 1) {
+                    const prevDay = sortedData[index + 1];
+                    const change = ((day.close - prevDay.close) / prevDay.close) * 100;
+                    return { ...day, change };
+                }
+                return { ...day, change: 0 }; // 最后一天没有前一天数据
+            });
+
+            const tableHtml = `
+                <div style="margin-bottom: 1rem; font-size: 0.9rem; color: #666;">
+                    显示 ${dataWithChange.length} 条记录（按日期倒序排列）
+                </div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">日期</th>
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">开盘价</th>
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">最高价</th>
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">最低价</th>
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">收盘价</th>
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">交易量</th>
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid #dee2e6;">涨跌幅</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dataWithChange.map(day => `
+                            <tr style="border-bottom: 1px solid #dee2e6;">
+                                <td style="padding: 0.75rem;">${new Date(day.date).toLocaleDateString('zh-CN')}</td>
+                                <td style="padding: 0.75rem;">¥${day.open ? day.open.toFixed(2) : 'N/A'}</td>
+                                <td style="padding: 0.75rem;">¥${day.high ? day.high.toFixed(2) : 'N/A'}</td>
+                                <td style="padding: 0.75rem;">¥${day.low ? day.low.toFixed(2) : 'N/A'}</td>
+                                <td style="padding: 0.75rem;">¥${day.close ? day.close.toFixed(2) : 'N/A'}</td>
+                                <td style="padding: 0.75rem;">${day.volume ? day.volume.toLocaleString() : 'N/A'}</td>
+                                <td style="padding: 0.75rem;">
+                                    <span style="color: ${day.change >= 0 ? '#28a745' : '#dc3545'}">
+                                        ${day.change >= 0 ? '+' : ''}${day.change.toFixed(2)}%
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            document.getElementById('dataTable').innerHTML = tableHtml;
+        }
+
+        // 技术指标计算函数
+        function calculateSMA(data, period) {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    result.push(null);
+                } else {
+                    const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+                    result.push(sum / period);
+                }
+            }
+            return result;
+        }
+
+        function calculateRSI(prices, period = 14) {
+            const rsi = [];
+            let gains = 0;
+            let losses = 0;
+
+            for (let i = 1; i <= period; i++) {
+                const change = prices[i] - prices[i - 1];
+                gains += Math.max(0, change);
+                losses += Math.max(0, -change);
+            }
+
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+
+            for (let i = period + 1; i < prices.length; i++) {
+                const change = prices[i] - prices[i - 1];
+                avgGain = (avgGain * (period - 1) + Math.max(0, change)) / period;
+                avgLoss = (avgLoss * (period - 1) + Math.max(0, -change)) / period;
+                
+                const rs = avgGain / avgLoss;
+                rsi.push(100 - (100 / (1 + rs)));
+            }
+
+            return rsi;
+        }
+
+        function calculateStandardDeviation(data) {
+            const mean = data.reduce((a, b) => a + b, 0) / data.length;
+            const squareDiffs = data.map(value => Math.pow(value - mean, 2));
+            const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / data.length;
+            return Math.sqrt(avgSquareDiff);
+        }
+    </script>
+</body>
+</html>
