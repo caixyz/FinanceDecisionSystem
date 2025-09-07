@@ -118,6 +118,8 @@ def debug_index():
     """调试版主页"""
     return render_template('debug_index.html')
 
+
+
 # ================================
 # 认证API接口
 # ================================
@@ -2073,6 +2075,90 @@ def get_table_description(table_name):
     
     return descriptions.get(table_name, f'{table_name} 数据表')
 
+
+@app.route('/long_term_stocks')
+@login_required
+def long_term_stocks():
+    """长期存活股票分析页面"""
+    return render_template('long_term_stocks.html')
+
+@app.route('/api/long_term_analysis')
+@login_required
+def api_long_term_analysis():
+    """获取长期存活股票分析数据"""
+    try:
+        # 导入长期存活分析器
+        import sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        
+        try:
+            from dev_tools.long_term_survival_analysis import LongTermSurvivalAnalyzer
+            analyzer = LongTermSurvivalAnalyzer()
+            
+            # 获取长期存活股票数据
+            long_term_stocks = analyzer.get_long_term_survivors()
+            
+            # 转换为前端需要的格式
+            stocks_data = []
+            for stock in long_term_stocks:
+                stocks_data.append({
+                    'symbol': stock.get('symbol', ''),
+                    'name': stock.get('name', ''),
+                    'industry': stock.get('industry', ''),
+                    'survival_years': stock.get('survival_years', 0),
+                    'quality_score': stock.get('quality_score', 0),
+                    'category': stock.get('category', '未知')
+                })
+            
+            return jsonify({
+                'code': 200,
+                'message': '获取成功',
+                'data': {
+                    'stocks': stocks_data,
+                    'summary': {
+                        'total': len(stocks_data),
+                        'twenty_year_plus': len([s for s in stocks_data if s['survival_years'] >= 20]),
+                        'fifteen_year_plus': len([s for s in stocks_data if 15 <= s['survival_years'] < 20]),
+                        'ten_year_plus': len([s for s in stocks_data if 10 <= s['survival_years'] < 15])
+                    }
+                }
+            })
+            
+        except ImportError:
+            # 如果分析器不可用，返回演示数据
+            demo_data = [
+                {'symbol': '000001', 'name': '平安银行', 'industry': '银行', 'survival_years': 34, 'quality_score': 95, 'category': '20年+'},
+                {'symbol': '000002', 'name': '万科A', 'industry': '房地产', 'survival_years': 34, 'quality_score': 92, 'category': '20年+'},
+                {'symbol': '600036', 'name': '招商银行', 'industry': '银行', 'survival_years': 34, 'quality_score': 98, 'category': '20年+'},
+                {'symbol': '000858', 'name': '五粮液', 'industry': '白酒', 'survival_years': 27, 'quality_score': 96, 'category': '20年+'},
+                {'symbol': '600519', 'name': '贵州茅台', 'industry': '白酒', 'survival_years': 24, 'quality_score': 100, 'category': '20年+'},
+                {'symbol': '000651', 'name': '格力电器', 'industry': '家电', 'survival_years': 29, 'quality_score': 94, 'category': '20年+'},
+                {'symbol': '000333', 'name': '美的集团', 'industry': '家电', 'survival_years': 32, 'quality_score': 93, 'category': '20年+'},
+                {'symbol': '601318', 'name': '中国平安', 'industry': '保险', 'survival_years': 18, 'quality_score': 97, 'category': '15-20年'},
+                {'symbol': '600031', 'name': '三一重工', 'industry': '工程机械', 'survival_years': 22, 'quality_score': 85, 'category': '20年+'},
+                {'symbol': '600276', 'name': '恒瑞医药', 'industry': '医药', 'survival_years': 25, 'quality_score': 90, 'category': '20年+'}
+            ]
+            
+            return jsonify({
+                'code': 200,
+                'message': '获取成功（演示数据）',
+                'data': {
+                    'stocks': demo_data,
+                    'summary': {
+                        'total': len(demo_data),
+                        'twenty_year_plus': len([s for s in demo_data if s['survival_years'] >= 20]),
+                        'fifteen_year_plus': len([s for s in demo_data if 15 <= s['survival_years'] < 20]),
+                        'ten_year_plus': len([s for s in demo_data if 10 <= s['survival_years'] < 15])
+                    }
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"获取长期存活股票分析数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     # 确保必要的目录存在

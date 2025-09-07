@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 测试AKShare接口下载功能的脚本 - 使用简单接口
 """

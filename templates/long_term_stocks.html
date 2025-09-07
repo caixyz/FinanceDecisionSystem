@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>长期存活股票分析 - 金融决策系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .nav-buttons {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .stock-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .stock-table th,
+        .stock-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .stock-table th {
+            background: #f8f9fa;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .stock-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .quality-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .quality-excellent {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .quality-good {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .quality-average {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .survival-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .survival-20plus {
+            background: #007bff;
+            color: white;
+        }
+
+        .survival-15plus {
+            background: #28a745;
+            color: white;
+        }
+
+        .survival-10plus {
+            background: #ffc107;
+            color: black;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .strategy-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .strategy-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .strategy-title {
+            font-size: 1.3rem;
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .strategy-description {
+            color: #666;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .strategy-stocks {
+            font-size: 0.9rem;
+        }
+
+        .strategy-stocks ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .strategy-stocks li {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stock-table {
+                font-size: 0.9rem;
+            }
+            
+            .stock-table th,
+            .stock-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>长期存活股票分析</h1>
+            <p>识别未来10-20年仍将存在的优质公司</p>
+        </div>
+
+        <div class="nav-buttons">
+            <a href="/dashboard" class="nav-btn">返回控制台</a>
+            <button class="nav-btn" onclick="loadDemoData()">加载演示数据</button>
+            <button class="nav-btn" onclick="exportData()">导出数据</button>
+        </div>
+
+        <!-- 统计概览 -->
+        <div class="section">
+            <h2 class="section-title">📊 统计概览</h2>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalStocks">-</div>
+                    <div class="stat-label">总股票数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="longTermStocks">-</div>
+                    <div class="stat-label">10年以上</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="twentyYearStocks">-</div>
+                    <div class="stat-label">20年以上</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="topQualityStocks">-</div>
+                    <div class="stat-label">优质股票</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 长期存活股票列表 -->
+        <div class="section">
+            <h2 class="section-title">🏆 长期存活优质股票</h2>
+            <div id="loadingIndicator" class="loading">正在加载数据...</div>
+            <div id="errorMessage" class="error" style="display: none;"></div>
+            <table class="stock-table" id="stockTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>股票代码</th>
+                        <th>股票名称</th>
+                        <th>行业</th>
+                        <th>存活年限</th>
+                        <th>质量评分</th>
+                        <th>分类</th>
+                    </tr>
+                </thead>
+                <tbody id="stockTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 投资策略建议 -->
+        <div class="section">
+            <h2 class="section-title">💡 投资策略建议</h2>
+            <div class="strategy-section" id="strategySection">
+                <div class="strategy-card">
+                    <h3 class="strategy-title">保守型策略</h3>
+                    <p class="strategy-description">专注20年以上老牌公司，低风险稳定收益</p>
+                    <div class="strategy-stocks" id="conservativeStocks">
+                        加载中...
+                    </div>
+                </div>
+                <div class="strategy-card">
+                    <h3 class="strategy-title">平衡型策略</h3>
+                    <p class="strategy-description">10-20年成熟公司为主，平衡风险与收益</p>
+                    <div class="strategy-stocks" id="balancedStocks">
+                        加载中...
+                    </div>
+                </div>
+                <div class="strategy-card">
+                    <h3 class="strategy-title">成长型策略</h3>
+                    <p class="strategy-description">10-15年成长公司，追求更高收益</p>
+                    <div class="strategy-stocks" id="growthStocks">
+                        加载中...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 演示数据
+        const demoData = [
+            {symbol: '000001', name: '平安银行', industry: '银行', survival_years: 34, quality_score: 95, category: '20年+'},
+            {symbol: '000002', name: '万科A', industry: '房地产', survival_years: 34, quality_score: 92, category: '20年+'},
+            {symbol: '600036', name: '招商银行', industry: '银行', survival_years: 34, quality_score: 98, category: '20年+'},
+            {symbol: '000858', name: '五粮液', industry: '白酒', survival_years: 27, quality_score: 96, category: '20年+'},
+            {symbol: '600519', name: '贵州茅台', industry: '白酒', survival_years: 24, quality_score: 100, category: '20年+'},
+            {symbol: '000651', name: '格力电器', industry: '家电', survival_years: 29, quality_score: 94, category: '20年+'},
+            {symbol: '000333', name: '美的集团', industry: '家电', survival_years: 32, quality_score: 93, category: '20年+'},
+            {symbol: '601318', name: '中国平安', industry: '保险', survival_years: 18, quality_score: 97, category: '15-20年'},
+            {symbol: '600031', name: '三一重工', industry: '工程机械', survival_years: 22, quality_score: 85, category: '20年+'},
+            {symbol: '600276', name: '恒瑞医药', industry: '医药', survival_years: 25, quality_score: 90, category: '20年+'},
+            {symbol: '002415', name: '海康威视', industry: '安防', survival_years: 15, quality_score: 91, category: '10-15年'},
+            {symbol: '002594', name: '比亚迪', industry: '汽车', survival_years: 14, quality_score: 89, category: '10-15年'},
+            {symbol: '300750', name: '宁德时代', industry: '新能源', survival_years: 7, quality_score: 93, category: '5-10年'}
+        ];
+
+        // 加载演示数据
+        function loadDemoData() {
+            displayStockData(demoData);
+            updateStats(demoData);
+            loadStrategies(demoData);
+        }
+
+        // 更新统计数据
+        function updateStats(data) {
+            document.getElementById('totalStocks').textContent = data.length;
+            document.getElementById('longTermStocks').textContent = data.filter(s => s.survival_years >= 10).length;
+            document.getElementById('twentyYearStocks').textContent = data.filter(s => s.survival_years >= 20).length;
+            document.getElementById('topQualityStocks').textContent = data.filter(s => s.quality_score >= 90).length;
+        }
+
+        // 显示股票数据
+        function displayStockData(data) {
+            const loading = document.getElementById('loadingIndicator');
+            const table = document.getElementById('stockTable');
+            const tbody = document.getElementById('stockTableBody');
+            
+            loading.style.display = 'none';
+            table.style.display = 'table';
+            
+            tbody.innerHTML = '';
+            
+            data.sort((a, b) => b.survival_years - a.survival_years).forEach(stock => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${stock.symbol}</td>
+                    <td><strong>${stock.name}</strong></td>
+                    <td>${stock.industry}</td>
+                    <td><strong>${stock.survival_years}年</strong></td>
+                    <td>
+                        <span class="quality-badge ${getQualityClass(stock.quality_score)}">
+                            ${stock.quality_score}分
+                        </span>
+                    </td>
+                    <td>
+                        <span class="survival-badge ${getSurvivalClass(stock.survival_years)}">
+                            ${stock.category}
+                        </span>
+                    </td>
+                `;
+            });
+        }
+
+        // 获取质量评分样式类
+        function getQualityClass(score) {
+            if (score >= 95) return 'quality-excellent';
+            if (score >= 85) return 'quality-good';
+            return 'quality-average';
+        }
+
+        // 获取存活年限样式类
+        function getSurvivalClass(years) {
+            if (years >= 20) return 'survival-20plus';
+            if (years >= 15) return 'survival-15plus';
+            return 'survival-10plus';
+        }
+
+        // 加载策略建议
+        function loadStrategies(data) {
+            const conservative = data.filter(s => s.survival_years >= 20 && s.quality_score >= 90);
+            const balanced = data.filter(s => s.survival_years >= 10 && s.survival_years < 20 && s.quality_score >= 85);
+            const growth = data.filter(s => s.survival_years >= 10 && s.survival_years < 15 && s.quality_score >= 80);
+
+            document.getElementById('conservativeStocks').innerHTML = formatStrategyStocks(conservative);
+            document.getElementById('balancedStocks').innerHTML = formatStrategyStocks(balanced);
+            document.getElementById('growthStocks').innerHTML = formatStrategyStocks(growth);
+        }
+
+        // 格式化策略股票列表
+        function formatStrategyStocks(stocks) {
+            if (stocks.length === 0) return '暂无符合条件的股票';
+            
+            let html = `<ul>`;
+            stocks.slice(0, 5).forEach(stock => {
+                html += `<li><strong>${stock.name}</strong> (${stock.industry}) - ${stock.survival_years}年</li>`;
+            });
+            if (stocks.length > 5) {
+                html += `<li>...等${stocks.length}只股票</li>`;
+            }
+            html += `</ul>`;
+            return html;
+        }
+
+        // 导出数据
+        function exportData() {
+            const csvContent = "data:text/csv;charset=utf-8," + 
+                "股票代码,股票名称,行业,存活年限,质量评分,分类\n" +
+                demoData.map(s => `${s.symbol},${s.name},${s.industry},${s.survival_years},${s.quality_score},${s.category}`).join("\n");
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "long_term_stocks.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 页面加载时显示演示数据
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(loadDemoData, 500);
+        });
+    </script>
+</body>
+</html>
