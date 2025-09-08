@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>价值投资分析 - 金融决策系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.8rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .main-content {
+            padding: 2rem 0;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .page-title {
+            color: #333;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-description {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .controls-section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .control-select, .control-input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .results-section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .results-title {
+            color: #333;
+            font-size: 1.5rem;
+        }
+
+        .results-count {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .stock-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stock-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        .stock-symbol {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stock-name {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .stock-industry {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        .stock-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stock-recommendation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .recommendation {
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .risk-level {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .risk-low {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .risk-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .risk-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stock-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">💎 价值投资分析</div>
+            <div class="nav-menu">
+                <a href="/dashboard" class="nav-link">返回控制台</a>
+                <a href="/logout" class="nav-link">退出登录</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="main-content">
+            <div class="page-header">
+                <h1 class="page-title">价值投资分析 - 好公司筛选</h1>
+                <p class="page-description">
+                    基于价值投资理念，从市值、估值、成长性等多维度评估公司投资价值，为您筛选出优质的投资标的。
+                </p>
+            </div>
+
+            <div class="controls-section">
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label class="control-label">分析股票数量</label>
+                        <select id="stockLimit" class="control-select">
+                            <option value="30">前30只</option>
+                            <option value="50">前50只</option>
+                            <option value="100">前100只</option>
+                            <option value="all">全部股票</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">最低评分</label>
+                        <input type="number" id="minScore" class="control-input" value="70" min="0" max="100">
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">行业筛选</label>
+                        <select id="industryFilter" class="control-select">
+                            <option value="">全部行业</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <button onclick="runAnalysis()" class="btn btn-primary">开始分析</button>
+                        <button onclick="exportResults()" class="btn btn-secondary" id="exportBtn" style="display: none;">导出结果</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resultsSection" class="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2 class="results-title">分析结果</h2>
+                    <div class="results-count" id="resultsCount">-</div>
+                </div>
+                <div id="stockResults" class="stock-grid"></div>
+            </div>
+
+            <div id="loadingSection" class="loading" style="display: none;">
+                <div>正在分析股票数据，请稍候...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentResults = [];
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadIndustries();
+        });
+
+        // 加载行业列表
+        async function loadIndustries() {
+            try {
+                const response = await fetch('/api/stocks/industries');
+                const data = await response.json();
+                
+                if (data.code === 200) {
+                    const industrySelect = document.getElementById('industryFilter');
+                    data.data.forEach(industry => {
+                        const option = document.createElement('option');
+                        option.value = industry;
+                        option.textContent = industry;
+                        industrySelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载行业列表失败:', error);
+            }
+        }
+
+        // 运行分析
+        async function runAnalysis() {
+            const limit = document.getElementById('stockLimit').value;
+            const minScore = document.getElementById('minScore').value;
+            const industry = document.getElementById('industryFilter').value;
+
+            document.getElementById('loadingSection').style.display = 'block';
+            document.getElementById('resultsSection').style.display = 'none';
+
+            try {
+                let url = `/api/value_analysis/top_stocks?limit=${limit}&min_score=${minScore}`;
+                if (industry) {
+                    url += `&industry=${encodeURIComponent(industry)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    displayResults(data.data);
+                } else {
+                    showError(data.message || '分析失败');
+                }
+            } catch (error) {
+                showError('分析过程中发生错误: ' + error.message);
+            } finally {
+                document.getElementById('loadingSection').style.display = 'none';
+            }
+        }
+
+        // 显示结果
+        function displayResults(data) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsCount = document.getElementById('resultsCount');
+            const stockResults = document.getElementById('stockResults');
+            const exportBtn = document.getElementById('exportBtn');
+
+            currentResults = data.top_stocks || [];
+            
+            resultsCount.textContent = `共找到 ${currentResults.length} 只股票`;
+            resultsSection.style.display = 'block';
+            exportBtn.style.display = currentResults.length > 0 ? 'inline-block' : 'none';
+
+            if (currentResults.length === 0) {
+                stockResults.innerHTML = '<div class="empty-state">没有找到符合条件的股票</div>';
+                return;
+            }
+
+            stockResults.innerHTML = currentResults.map(stock => `
+                <div class="stock-card">
+                    <div class="stock-header">
+                        <div>
+                            <div class="stock-symbol">${stock.symbol}</div>
+                            <div class="stock-name">${stock.name}</div>
+                        </div>
+                        <div class="stock-industry">${stock.industry}</div>
+                    </div>
+                    
+                    <div class="stock-metrics">
+                        <div class="metric">
+                            <span class="metric-label">评分:</span>
+                            <span class="metric-value">${stock.score}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">评分百分比:</span>
+                            <span class="metric-value">${stock.score_percent}%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">市值:</span>
+                            <span class="metric-value">${stock.market_cap || '-'}亿</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">PE:</span>
+                            <span class="metric-value">${stock.pe || '-'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stock-recommendation">
+                        <span class="recommendation">${stock.recommendation}</span>
+                        <span class="risk-level risk-${getRiskClass(stock.risk_level)}">${stock.risk_level}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 获取风险等级CSS类
+        function getRiskClass(riskLevel) {
+            if (riskLevel.includes('低')) return 'low';
+            if (riskLevel.includes('中')) return 'medium';
+            return 'high';
+        }
+
+        // 显示错误
+        function showError(message) {
+            const resultsSection = document.getElementById('resultsSection');
+            const stockResults = document.getElementById('stockResults');
+            
+            resultsSection.style.display = 'block';
+            stockResults.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        // 导出结果
+        function exportResults() {
+            if (currentResults.length === 0) return;
+
+            const csvContent = "data:text/csv;charset=utf-8," + [
+                ["股票代码", "股票名称", "行业", "评分", "评分百分比", "推荐等级", "风险等级"],
+                ...currentResults.map(stock => [
+                    stock.symbol,
+                    stock.name,
+                    stock.industry,
+                    stock.score,
+                    stock.score_percent,
+                    stock.recommendation,
+                    stock.risk_level
+                ])
+            ].map(row => row.join(",")).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `价值投资分析结果_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 初始加载
+        runAnalysis();
+    </script>
+</body>
+</html>
