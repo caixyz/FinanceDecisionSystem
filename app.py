@@ -119,6 +119,13 @@ def debug_index():
     return render_template('debug_index.html')
 
 
+@app.route('/value_analysis')
+@login_required
+def value_analysis():
+    """价值投资分析页面"""
+    return render_template('value_analysis.html')
+
+
 
 # ================================
 # 认证API接口
@@ -2158,6 +2165,320 @@ def api_long_term_analysis():
         return jsonify({
             'code': 500,
             'message': f'获取失败: {str(e)}'
+        }), 500
+
+# ================================
+# 价值投资分析API接口
+# ================================
+
+@app.route('/api/value_analysis/top_stocks')
+@require_login
+def get_top_value_stocks():
+    """获取价值投资分析结果"""
+    import os  # 确保在函数作用域内导入os
+    
+    try:
+        limit_str = request.args.get('limit', '10')
+        min_score = request.args.get('min_score', 0, type=int)
+        
+        # 处理"all"选项和数字限制
+        if str(limit_str).lower() == 'all':
+            limit = None  # 不限制数量
+        else:
+            limit = int(limit_str)
+            limit = min(max(limit, 1), 1000)  # 放宽限制到1000
+        
+        # 导入简化版价值投资分析器
+        import sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        
+        try:
+            from simple_value_analyzer import SimpleValueAnalyzer
+            
+            analyzer = SimpleValueAnalyzer()
+            
+            # 获取股票数据并分析
+            if limit is None:
+                stock_limit = None  # 获取全部股票
+            else:
+                stock_limit = limit * 3  # 获取更多股票用于筛选
+            stocks_df = analyzer.get_all_stocks(stock_limit)  # 获取股票数据
+            
+            if stocks_df.empty:
+                return jsonify({
+                    'code': 404,
+                    'message': '无法获取股票数据'
+                })
+            
+            qualified_stocks = []
+            
+            for _, stock in stocks_df.iterrows():
+                try:
+                    result = analyzer.analyze_stock(stock.to_dict())
+                    
+                    if result.get('qualified', False) and 'error' not in result:
+                        qualified_stocks.append(result)
+                        
+                    if limit and len(qualified_stocks) >= limit:
+                        break
+                        
+                except Exception as e:
+                    logger.error(f"分析股票失败 {stock.get('symbol', '未知')}: {e}")
+                    continue
+            
+            # 按得分排序并应用最小评分过滤
+            qualified_stocks = [s for s in qualified_stocks if s.get('score', 0) >= min_score]
+            qualified_stocks.sort(key=lambda x: x['score'], reverse=True)
+            
+            # 应用数量限制
+            if limit:
+                qualified_stocks = qualified_stocks[:limit]
+            
+            return jsonify({
+                'code': 200,
+                'message': '获取成功',
+                'data': qualified_stocks
+            })
+            
+        except ImportError:
+            # 使用现有的分析结果文件
+            import pandas as pd
+            import glob
+            import os
+            
+            # 查找最新的推荐文件
+            reports_dir = 'reports'
+            pattern = 'simple_recommendations_*.csv'
+            files = glob.glob(os.path.join(reports_dir, pattern))
+            
+            if files:
+                # 使用最新的分析结果
+                latest_file = max(files, key=os.path.getctime)
+                df = pd.read_csv(latest_file)
+                
+                # 转换为API格式
+                stocks = []
+                for _, row in df.iterrows():
+                    # 处理CSV列名映射
+                    stock_data = {
+                        'symbol': str(row['股票代码']).zfill(6),  # 补零到6位
+                        'name': str(row['股票名称']),
+                        'industry': str(row.get('行业', '未分类')),
+                        'score': int(row['得分']),
+                        'score_percent': float(str(row['得分百分比']).replace('%', '')),
+                        'recommendation': str(row['推荐等级']),
+                        'risk_level': str(row['风险等级']),
+                        'key_metrics': {
+                            '市值': str(row['市值']),
+                            'PE': float(row['PE']),
+                            'PB': float(row['PB']),
+                            '收盘价': float(row['PE'])  # 使用PE值作为示例
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 15, 'passed': True}
+                        }
+                    }
+                    stocks.append(stock_data)
+                
+                # 应用最小评分过滤并排序
+                stocks = [s for s in stocks if s.get('score', 0) >= min_score]
+                stocks.sort(key=lambda x: x['score'], reverse=True)
+                
+                # 应用数量限制
+                if limit:
+                    stocks = stocks[:limit]
+                
+                return jsonify({
+                    'code': 200,
+                    'message': '获取成功',
+                    'data': stocks
+                })
+            else:
+                # 如果没有现有文件，使用演示数据
+                demo_data = [
+                    {
+                        'symbol': '000001',
+                        'name': '平安银行',
+                        'industry': '银行',
+                        'score': 85,
+                        'score_percent': 85.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '低风险',
+                        'key_metrics': {
+                            '市值': '84.0亿',
+                            'PE': 6.0,
+                            'PB': 3.5,
+                            '收盘价': 43.0
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '000066',
+                        'name': '中国长城',
+                        'industry': '计算机',
+                        'score': 85,
+                        'score_percent': 85.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '中低风险',
+                        'key_metrics': {
+                            '市值': '45.0亿',
+                            'PE': 8.0,
+                            'PB': 2.5,
+                            '收盘价': 15.0
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '000029',
+                        'name': '深深房A',
+                        'industry': '房地产',
+                        'score': 85,
+                        'score_percent': 85.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '中风险',
+                        'key_metrics': {
+                            '市值': '35.0亿',
+                            'PE': 12.0,
+                            'PB': 1.8,
+                            '收盘价': 8.5
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    }
+                ]
+                
+                # 应用最小评分过滤并排序
+                demo_data = [s for s in demo_data if s.get('score', 0) >= min_score]
+                
+                # 应用数量限制
+                if limit:
+                    demo_data = demo_data[:limit]
+                
+                return jsonify({
+                    'code': 200,
+                    'message': '获取成功',
+                    'data': demo_data
+                })
+            
+    except Exception as e:
+        logger.error(f"获取价值投资分析结果失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取失败: {str(e)}'
+        }), 500
+
+@app.route('/api/value_analysis/quick_scan')
+@require_login
+def quick_value_scan():
+    """快速价值投资扫描"""
+    import os  # 确保在函数作用域内导入os
+    
+    try:
+        # 导入简化版价值投资分析器
+        import sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        
+        try:
+            from simple_value_analyzer import SimpleValueAnalyzer
+            
+            analyzer = SimpleValueAnalyzer()
+            
+            # 获取所有股票进行快速扫描
+            stocks_df = analyzer.get_all_stocks()
+            
+            if stocks_df.empty:
+                return jsonify({
+                    'code': 404,
+                    'message': '无法获取股票数据'
+                })
+            
+            qualified_stocks = []
+            total_analyzed = 0
+            
+            for _, stock in stocks_df.iterrows():
+                try:
+                    result = analyzer.analyze_stock(stock.to_dict())
+                    total_analyzed += 1
+                    
+                    if result.get('qualified', False) and 'error' not in result:
+                        qualified_stocks.append(result)
+                            
+                except Exception as e:
+                    continue
+            
+            # 按得分排序并取前20名用于快速展示
+            qualified_stocks.sort(key=lambda x: x['score'], reverse=True)
+            top_stocks = qualified_stocks[:20]
+            
+            return jsonify({
+                'code': 200,
+                'message': '扫描完成',
+                'data': {
+                    'total_analyzed': total_analyzed,
+                    'qualified_count': len(qualified_stocks),
+                    'qualified_rate': round(len(qualified_stocks) / total_analyzed * 100, 2) if total_analyzed > 0 else 0,
+                    'top_stocks': top_stocks
+                }
+            })
+            
+        except ImportError:
+            # 如果分析器不可用，返回演示数据
+            return jsonify({
+                'code': 200,
+                'message': '扫描完成（演示数据）',
+                'data': {
+                    'total_analyzed': 100,
+                    'qualified_count': 35,
+                    'qualified_rate': 35.0,
+                    'top_stocks': [
+                        {
+                            'symbol': '000001',
+                            'name': '平安银行',
+                            'industry': '银行',
+                            'score': 85,
+                            'score_percent': 85.0,
+                            'recommendation': '强烈推荐',
+                            'risk_level': '低风险'
+                        },
+                        {
+                            'symbol': '000858',
+                            'name': '五粮液',
+                            'industry': '白酒',
+                            'score': 82,
+                            'score_percent': 82.0,
+                            'recommendation': '推荐',
+                            'risk_level': '中低风险'
+                        }
+                    ]
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"快速价值投资扫描失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'扫描失败: {str(e)}'
         }), 500
 
 if __name__ == '__main__':

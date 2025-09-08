@@ -429,6 +429,17 @@
                     识别未来10-20年仍将存在的优质公司，基于历史数据预测长期存活能力。
                 </div>
             </div>
+
+            <!-- 新增：价值投资分析卡片（好公司） -->
+            <div class="feature-card" onclick="window.location.href='/value_analysis'">
+                <div class="feature-header">
+                    <div class="feature-icon">💎</div>
+                    <div class="feature-title">好公司</div>
+                </div>
+                <div class="feature-description">
+                    基于价值投资理念筛选优质公司，从市值、估值、成长性等多维度评估投资价值。
+                </div>
+            </div>
         </div>
 
         <!-- 最近活动 -->
@@ -582,6 +593,184 @@
                 return Math.floor(diff / 3600000) + '小时前';
             } else {
                 return Math.floor(diff / 86400000) + '天前';
+            }
+        }
+
+        // 显示价值投资分析模态框（好公司）
+        function showValueAnalysisModal() {
+            showModal('价值投资分析 - 好公司', `
+                <div style="margin-bottom: 1rem;">
+                    <h3 style="color: #667eea; margin-bottom: 1rem;">💎 价值投资分析</h3>
+                    <p style="color: #666; margin-bottom: 1rem;">
+                        基于价值投资理念，从市值、估值、成长性等多维度评估公司投资价值，为您筛选出优质的投资标的。
+                    </p>
+                </div>
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500;">
+                        分析股票数量：
+                    </label>
+                    <select id="valueStockLimit" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+                        <option value="10">前10只股票</option>
+                        <option value="20" selected>前20只股票</option>
+                        <option value="50">前50只股票</option>
+                        <option value="100">前100只股票</option>
+                    </select>
+                </div>
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="color: #333; margin-bottom: 0.5rem;">分析维度：</h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; font-size: 0.9rem; color: #666;">
+                        <div>✅ 市值评估（20分）</div>
+                        <div>✅ 估值合理性（30分）</div>
+                        <div>✅ 价格稳定性（20分）</div>
+                        <div>✅ 行业地位（20分）</div>
+                        <div>✅ 流动性评估（10分）</div>
+                        <div>✅ 综合评分（100分制）</div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 1rem;">
+                    <button onclick="runQuickValueScan()" style="flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        🔍 快速扫描
+                    </button>
+                    <button onclick="runValueAnalysis()" style="flex: 1; padding: 0.75rem; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        📊 详细分析
+                    </button>
+                </div>
+                
+                <div id="valueAnalysisResult" style="margin-top: 1rem;"></div>
+            `, 'large');
+        }
+
+        // 快速价值投资扫描
+        async function runQuickValueScan() {
+            const resultDiv = document.getElementById('valueAnalysisResult');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div><p style="margin-top: 1rem; color: #666;">正在扫描优质公司...</p></div>';
+            
+            try {
+                const response = await fetch('/api/value_analysis/quick_scan');
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const data = result.data;
+                    
+                    let html = `
+                        <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                            <h4 style="color: #333; margin-bottom: 1rem;">📈 扫描结果</h4>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center; margin-bottom: 1rem;">
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #667eea;">${data.total_analyzed}</div>
+                                    <div style="font-size: 0.8rem; color: #666;">分析股票数</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #28a745;">${data.qualified_count}</div>
+                                    <div style="font-size: 0.8rem; color: #666;">优质公司数</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #ffc107;">${data.qualified_rate}%</div>
+                                    <div style="font-size: 0.8rem; color: #666;">优质率</div>
+                                </div>
+                            </div>
+                    `;
+                    
+                    if (data.top_stocks && data.top_stocks.length > 0) {
+                        html += '<h5 style="color: #333; margin: 1rem 0 0.5rem 0;">🏆 前5名推荐：</h5>';
+                        html += '<div style="display: grid; gap: 0.5rem;">';
+                        
+                        data.top_stocks.forEach((stock, index) => {
+                            const scoreColor = stock.score >= 80 ? '#28a745' : stock.score >= 70 ? '#ffc107' : '#dc3545';
+                            html += `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: white; border-radius: 4px; border-left: 4px solid ${scoreColor};">
+                                    <div>
+                                        <strong>${stock.symbol}</strong> ${stock.name}
+                                        <small style="color: #666;">(${stock.industry})</small>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-weight: bold; color: ${scoreColor};">${stock.score}分</div>
+                                        <small style="color: #666;">${stock.recommendation}</small>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        html += '</div>';
+                    }
+                    
+                    html += '</div>';
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div style="color: #dc3545; padding: 1rem; background: #f8d7da; border-radius: 4px;">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: #dc3545; padding: 1rem; background: #f8d7da; border-radius: 4px;">❌ 扫描失败：${error.message}</div>`;
+            }
+        }
+
+        // 运行详细价值投资分析
+        async function runValueAnalysis() {
+            const limit = document.getElementById('valueStockLimit').value;
+            const resultDiv = document.getElementById('valueAnalysisResult');
+            
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div><p style="margin-top: 1rem; color: #666;">正在分析优质公司...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/value_analysis/top_stocks?limit=${limit}`);
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const stocks = result.data;
+                    
+                    if (stocks.length === 0) {
+                        resultDiv.innerHTML = '<div style="color: #666; padding: 1rem; text-align: center;">未找到符合条件的优质公司，请尝试调整筛选条件。</div>';
+                        return;
+                    }
+                    
+                    let html = `
+                        <div style="margin-top: 1.5rem;">
+                            <h4 style="color: #333; margin-bottom: 1rem;">📊 价值投资分析结果</h4>
+                            <div style="display: grid; gap: 0.75rem;">
+                    `;
+                    
+                    stocks.forEach(stock => {
+                        const scoreColor = stock.score >= 80 ? '#28a745' : stock.score >= 70 ? '#ffc107' : '#dc3545';
+                        const riskColor = stock.risk_level.includes('低') ? '#28a745' : stock.risk_level.includes('中') ? '#ffc107' : '#dc3545';
+                        
+                        html += `
+                            <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: white;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <div>
+                                        <h5 style="margin: 0; color: #333;">${stock.symbol} - ${stock.name}</h5>
+                                        <small style="color: #666;">${stock.industry}</small>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 1.2rem; font-weight: bold; color: ${scoreColor};">${stock.score}分</div>
+                                        <div style="font-size: 0.8rem; color: ${riskColor};">${stock.risk_level}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                                    <div>市值: ${stock.key_metrics.市值}</div>
+                                    <div>PE: ${stock.key_metrics.PE}</div>
+                                    <div>PB: ${stock.key_metrics.PB}</div>
+                                    <div>现价: ¥${stock.key_metrics.收盘价}</div>
+                                </div>
+                                
+                                <div style="font-size: 0.9rem;">
+                                    <strong style="color: ${scoreColor};">${stock.recommendation}</strong>
+                                    <small style="color: #666; margin-left: 0.5rem;">基于5维度综合评估</small>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div></div>';
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div style="color: #dc3545; padding: 1rem; background: #f8d7da; border-radius: 4px;">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: #dc3545; padding: 1rem; background: #f8d7da; border-radius: 4px;">❌ 分析失败：${error.message}</div>`;
             }
         }
 
