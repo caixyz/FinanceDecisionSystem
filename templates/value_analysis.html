@@ -413,7 +413,11 @@
                     url += `&industry=${encodeURIComponent(industry)}`;
                 }
 
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
                 const data = await response.json();
 
                 if (data.code === 200) {
@@ -435,7 +439,7 @@
             const stockResults = document.getElementById('stockResults');
             const exportBtn = document.getElementById('exportBtn');
 
-            currentResults = data.top_stocks || [];
+            currentResults = data || [];
             
             resultsCount.textContent = `共找到 ${currentResults.length} 只股票`;
             resultsSection.style.display = 'block';
@@ -453,31 +457,31 @@
                             <div class="stock-symbol">${stock.symbol}</div>
                             <div class="stock-name">${stock.name}</div>
                         </div>
-                        <div class="stock-industry">${stock.industry}</div>
+                        <div class="stock-industry">${stock.industry || '-'}</div>
                     </div>
                     
                     <div class="stock-metrics">
                         <div class="metric">
                             <span class="metric-label">评分:</span>
-                            <span class="metric-value">${stock.score}</span>
+                            <span class="metric-value">${stock.score || '-'}</span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">评分百分比:</span>
-                            <span class="metric-value">${stock.score_percent}%</span>
+                            <span class="metric-value">${stock.score_percent || '-'}%</span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">市值:</span>
-                            <span class="metric-value">${stock.market_cap || '-'}亿</span>
+                            <span class="metric-value">${stock.key_metrics?.市值 || stock.market_cap || '-'}亿</span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">PE:</span>
-                            <span class="metric-value">${stock.pe || '-'}</span>
+                            <span class="metric-value">${stock.key_metrics?.PE || stock.pe || '-'}</span>
                         </div>
                     </div>
                     
                     <div class="stock-recommendation">
-                        <span class="recommendation">${stock.recommendation}</span>
-                        <span class="risk-level risk-${getRiskClass(stock.risk_level)}">${stock.risk_level}</span>
+                        <span class="recommendation">${stock.recommendation || '未知'}</span>
+                        <span class="risk-level risk-${getRiskClass(stock.risk_level || '未知')}">${stock.risk_level || '未知'}</span>
                     </div>
                 </div>
             `).join('');

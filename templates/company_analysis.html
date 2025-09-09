@@ -372,7 +372,12 @@
         // 加载股票数据
         async function loadStockData(symbol) {
             try {
-                const response = await fetch(`/api/company/${symbol}/data`);
+                // 添加认证头
+                const response = await fetch(`/api/company/${symbol}/data`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
                 const data = await response.json();
                 
                 if (data.code === 200 || data.success) {
