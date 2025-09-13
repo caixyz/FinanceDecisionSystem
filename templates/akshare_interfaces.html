@@ -53,9 +53,9 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 2rem auto;
-            padding: 0 1rem;
+            padding: 0 2rem;
         }
 
         .header-section {
@@ -445,6 +445,7 @@
             statsContainer.style.display = 'block';
         }
 
+        // 在displayInterfaces函数中添加查看详情按钮 -->
         // 显示接口列表
         function displayInterfaces(interfaces) {
             const container = document.getElementById('interfaces-container');
@@ -459,7 +460,7 @@
                 `;
                 return;
             }
-
+        
             container.innerHTML = interfaces.map(item => `
                 <div class="stock-card">
                     <div class="stock-header">
@@ -486,7 +487,10 @@
                             <span class="detail-value" style="color: #28a745;">✅ ${item.status}</span>
                         </div>
                     </div>
-                    <button onclick="downloadInterfaceToDB('${item.interface_name}')" class="refresh-btn" style="width: 100%; margin-top: 1rem; background: #17a2b8;">📥 下载到数据库</button>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button onclick="downloadInterfaceToDB('${item.interface_name}')" class="refresh-btn" style="flex: 1; background: #17a2b8; font-size: 0.85rem; padding: 0.6rem;">📥 下载</button>
+                        <button onclick="viewInterfaceDetails('${item.interface_name}', '${item.interface_name_cn || item.interface_description}')" class="refresh-btn" style="flex: 1; background: #6f42c1; font-size: 0.85rem; padding: 0.6rem;">👁️ 查看详情</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -628,6 +632,252 @@
             a.click();
             URL.revokeObjectURL(url);
         }
+    </script>
+
+    <!-- 查看详情模态框 -->
+    <div id="detail-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 95%; max-width: 1300px; max-height: 85vh; overflow: hidden;">
+            <div style="padding: 1.5rem; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="detail-title" style="margin: 0; color: #2c3e50;">接口详情</h3>
+                <button onclick="closeDetailModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            
+            <div style="padding: 1.5rem; max-height: calc(80vh - 120px); overflow-y: auto;">
+                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-weight: bold; margin-right: 1rem;">总记录数: <span id="detail-total-count">0</span></span>
+                        <span>表名: <span id="detail-table-name" style="color: #007bff;">-</span></span>
+                    </div>
+                    <div>
+                        <button onclick="refreshDetailData()" class="refresh-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 刷新</button>
+                    </div>
+                </div>
+                
+                <div id="detail-content" style="margin-bottom: 1rem;">
+                    <div class="loading">
+                        <div class="loading-icon" style="font-size: 2rem;">⏳</div>
+                        <div>正在加载数据...</div>
+                    </div>
+                </div>
+                
+                <div id="detail-pagination" style="display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem;">
+                    <!-- 分页按钮将在这里生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 查看详情的全局变量
+        let currentInterfaceName = '';
+        let currentPage = 1;
+        let pageSize = 20;
+        let totalRecords = 0;
+
+        // 查看接口详情
+        async function viewInterfaceDetails(interfaceName, interfaceTitle) {
+            currentInterfaceName = interfaceName;
+            currentPage = 1;
+            
+            document.getElementById('detail-title').textContent = `${interfaceTitle} - 数据详情`;
+            document.getElementById('detail-modal').style.display = 'block';
+            
+            await loadDetailData();
+        }
+
+        // 关闭详情模态框
+        function closeDetailModal() {
+            document.getElementById('detail-modal').style.display = 'none';
+        }
+
+        // 加载详情数据
+        async function loadDetailData() {
+            try {
+                const content = document.getElementById('detail-content');
+                content.innerHTML = `
+                    <div class="loading">
+                        <div class="loading-icon" style="font-size: 2rem;">⏳</div>
+                        <div>正在加载数据...</div>
+                    </div>
+                `;
+
+                const response = await fetch(`/api/akshare/interfaces/${currentInterfaceName}/data?page=${currentPage}&page_size=${pageSize}`);
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const data = result.data;
+                    totalRecords = data.total_records;
+                    
+                    document.getElementById('detail-total-count').textContent = totalRecords.toLocaleString();
+                    document.getElementById('detail-table-name').textContent = data.table_name;
+                    
+                    displayDetailData(data.records, data.columns);
+                    renderPagination();
+                } else {
+                    content.innerHTML = `
+                        <div class="error">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">❌</div>
+                            <div>${result.message}</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('加载详情数据失败:', error);
+                document.getElementById('detail-content').innerHTML = `
+                    <div class="error">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">❌</div>
+                        <div>网络错误，请稍后重试</div>
+                    </div>
+                `;
+            }
+        }
+
+        // 显示详情数据
+        function displayDetailData(records, columns) {
+            const content = document.getElementById('detail-content');
+            
+            if (!records || records.length === 0) {
+                content.innerHTML = `
+                    <div class="empty">
+                        <div class="empty-icon" style="font-size: 2rem;">📭</div>
+                        <div>暂无数据</div>
+                        <div style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
+                            请先下载接口数据到数据库
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // 创建表格
+            let html = '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+            
+            // 表头
+            html += '<thead><tr style="background: #f8f9fa;">';
+            columns.forEach(col => {
+                html += `<th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: bold; white-space: nowrap;">${col}</th>`;
+            });
+            html += '</tr></thead>';
+            
+            // 数据行
+            html += '<tbody>';
+            records.forEach(record => {
+                html += '<tr style="border-bottom: 1px solid #dee2e6;">';
+                columns.forEach(col => {
+                    const value = record[col] || '';
+                    html += `<td style="padding: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;" title="${value}">${value}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            
+            html += '</table></div>';
+            
+            content.innerHTML = html;
+        }
+
+        // 渲染分页
+        function renderPagination() {
+            const pagination = document.getElementById('detail-pagination');
+            const totalPages = Math.ceil(totalRecords / pageSize);
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            
+            // 上一页
+            if (currentPage > 1) {
+                html += `<button onclick="goToPage(${currentPage - 1})" class="refresh-btn" style="padding: 0.5rem 0.8rem; font-size: 0.8rem; background: #6c757d;">上一页</button>`;
+            }
+            
+            // 页码
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const activeClass = i === currentPage ? 'style="background: #007bff;"' : 'style="background: #6c757d;"';
+                html += `<button onclick="goToPage(${i})" class="refresh-btn" ${activeClass} style="padding: 0.5rem 0.8rem; font-size: 0.8rem;">${i}</button>`;
+            }
+            
+            // 下一页
+            if (currentPage < totalPages) {
+                html += `<button onclick="goToPage(${currentPage + 1})" class="refresh-btn" style="padding: 0.5rem 0.8rem; font-size: 0.8rem; background: #6c757d;">下一页</button>`;
+            }
+            
+            // 添加跳转功能
+            html += `
+                <div style="display: inline-flex; align-items: center; margin-left: 1rem; gap: 0.5rem;">
+                    <span style="font-size: 0.8rem; color: #666;">跳转到</span>
+                    <input type="number" id="jump-to-page" 
+                           min="1" max="${totalPages}" 
+                           placeholder="${currentPage}" 
+                           style="width: 60px; padding: 0.4rem; font-size: 0.8rem; border: 1px solid #ddd; border-radius: 4px; text-align: center;"
+                           onkeypress="handleJumpPageKeyPress(event, ${totalPages})">
+                    <span style="font-size: 0.8rem; color: #666;">页</span>
+                    <button onclick="jumpToPage(${totalPages})" class="refresh-btn" style="padding: 0.5rem 0.8rem; font-size: 0.8rem; background: #28a745;">跳转</button>
+                </div>
+                <div style="margin-left: 1rem; font-size: 0.8rem; color: #666;">
+                    共 ${totalPages} 页，${totalRecords.toLocaleString()} 条记录
+                </div>
+            `;
+            
+            pagination.innerHTML = html;
+        }
+
+        // 跳转到指定页
+        function goToPage(page) {
+            if (page < 1 || page > Math.ceil(totalRecords / pageSize)) return;
+            
+            currentPage = page;
+            loadDetailData();
+        }
+
+        // 处理回车键跳转
+        function handleJumpPageKeyPress(event, totalPages) {
+            if (event.key === 'Enter') {
+                jumpToPage(totalPages);
+            }
+        }
+
+        // 跳转页面
+        function jumpToPage(totalPages) {
+            const input = document.getElementById('jump-to-page');
+            const pageNum = parseInt(input.value);
+            
+            if (isNaN(pageNum) || pageNum < 1 || pageNum > totalPages) {
+                alert(`请输入有效的页码（1-${totalPages}）`);
+                return;
+            }
+            
+            if (pageNum === currentPage) {
+                return; // 已经在当前页
+            }
+            
+            goToPage(pageNum);
+        }
+
+        // 刷新详情数据
+        async function refreshDetailData() {
+            await loadDetailData();
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('detail-modal');
+            if (event.target === modal) {
+                closeDetailModal();
+            }
+        }
+
+        // ESC键关闭模态框
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeDetailModal();
+            }
+        });
     </script>
 </body>
 </html>

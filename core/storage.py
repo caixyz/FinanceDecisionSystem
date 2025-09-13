@@ -223,16 +223,17 @@ class DatabaseManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute('''
-                    REPLACE INTO stock_info (symbol, name, industry, market_cap, pe_ratio, pb_ratio, close)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    REPLACE INTO stock_info (symbol, name, industry, market_cap, pe_ratio, pb_ratio, close, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
-                    info.get('股票简称', ''),
-                    info.get('所属行业', ''),
-                    info.get('总市值', 0),
-                    info.get('市盈率-动态', 0),
-                    info.get('市净率', 0),
-                    info.get('收盘价', 0)
+                    info.get('name', info.get('股票简称', '')),
+                    info.get('industry', info.get('所属行业', '')),
+                    info.get('market_cap', info.get('总市值', 0)),
+                    info.get('pe_ratio', info.get('市盈率-动态', 0)),
+                    info.get('pb_ratio', info.get('市净率', 0)),
+                    info.get('close', info.get('收盘价', 0)),
+                    info.get('update_time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 ))
                 
             logger.info(f"成功保存股票 {symbol} 基础信息")

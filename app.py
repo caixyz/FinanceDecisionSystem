@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 from functools import wraps
 import os
 import sys
+import uuid
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -23,6 +24,7 @@ from utils.config import config
 
 # 导入股票数据同步管理器
 from core.stock_sync import StockDataSynchronizer
+from core.sync_progress import sync_progress_manager
 
 # 创建Flask应用
 app = Flask(__name__)
@@ -733,29 +735,54 @@ def get_market_sentiment():
 # 数据同步API（需要登录）
 # ================================
 
-@app.route('/api/stocks/sync/list', methods=['POST'])
+
+
+@app.route('/api/stocks/sync/latest', methods=['POST'])
 @login_required
-def sync_stock_list():
-    """同步股票列表"""
+def sync_stock_latest():
+    """同步最新股票数据"""
     try:
+        # 获取请求参数
+        days = request.json.get('days', 30)
+        batch_size = request.json.get('batch_size', 50)
+        delay = request.json.get('delay', 1.0)
+        
+        # 创建同步会话
+        session_id = str(uuid.uuid4())
+        
         # 创建同步管理器
         synchronizer = StockDataSynchronizer()
         
-        # 同步股票列表
-        count = synchronizer.sync_stock_list()
+        # 在新线程中执行同步
+        def run_sync():
+            try:
+                result = synchronizer.sync_latest_stock_data(
+                    days=days, 
+                    batch_size=batch_size, 
+                    delay=delay,
+                    session_id=session_id
+                )
+            except Exception as e:
+                logger.error(f"同步最新股票数据失败: {e}")
+                sync_progress_manager.fail_sync(session_id, str(e))
+        
+        import threading
+        sync_thread = threading.Thread(target=run_sync)
+        sync_thread.daemon = True
+        sync_thread.start()
         
         return jsonify({
             'code': 200,
-            'message': '股票列表同步成功',
+            'message': '同步任务已启动',
             'data': {
-                'synced_count': count
+                'session_id': session_id
             }
         })
     except Exception as e:
-        logger.error(f"同步股票列表失败: {e}")
+        logger.error(f"启动同步任务失败: {e}")
         return jsonify({
             'code': 500,
-            'message': f'同步股票列表失败: {str(e)}'
+            'message': f'启动同步任务失败: {str(e)}'
         }), 500
 
 @app.route('/api/stocks/sync/history', methods=['POST'])
@@ -768,58 +795,141 @@ def sync_stock_history():
         batch_size = request.json.get('batch_size', 50)
         delay = request.json.get('delay', 1.0)
         
+        # 创建同步会话
+        session_id = str(uuid.uuid4())
+        
         # 创建同步管理器
         synchronizer = StockDataSynchronizer()
         
-        # 同步历史数据
-        result = synchronizer.sync_all_stock_daily_data(
-            days=days, 
-            batch_size=batch_size, 
-            delay=delay
-        )
+        # 在新线程中执行同步
+        def run_sync():
+            try:
+                result = synchronizer.sync_all_stock_daily_data(
+                    days=days, 
+                    batch_size=batch_size, 
+                    delay=delay,
+                    session_id=session_id
+                )
+            except Exception as e:
+                logger.error(f"同步历史数据失败: {e}")
+                sync_progress_manager.fail_sync(session_id, str(e))
+        
+        import threading
+        sync_thread = threading.Thread(target=run_sync)
+        sync_thread.daemon = True
+        sync_thread.start()
         
         return jsonify({
             'code': 200,
-            'message': '股票历史数据同步成功',
-            'data': result
+            'message': '同步任务已启动',
+            'data': {
+                'session_id': session_id
+            }
         })
     except Exception as e:
-        logger.error(f"同步股票历史数据失败: {e}")
+        logger.error(f"启动同步任务失败: {e}")
         return jsonify({
             'code': 500,
-            'message': f'同步股票历史数据失败: {str(e)}'
+            'message': f'启动同步任务失败: {str(e)}'
         }), 500
 
-@app.route('/api/stocks/sync/latest', methods=['POST'])
+@app.route('/api/stocks/sync/list', methods=['POST'])
 @login_required
-def sync_stock_latest():
-    """同步最新股票数据"""
+def sync_stock_list():
+    """同步股票列表"""
     try:
-        # 获取请求参数
-        days = request.json.get('days', 30)
-        batch_size = request.json.get('batch_size', 50)
-        delay = request.json.get('delay', 1.0)
+        # 创建同步会话
+        session_id = str(uuid.uuid4())
         
         # 创建同步管理器
         synchronizer = StockDataSynchronizer()
         
-        # 同步最新数据
-        result = synchronizer.sync_latest_stock_data(
-            days=days, 
-            batch_size=batch_size, 
-            delay=delay
-        )
+        # 在新线程中执行同步
+        def run_sync():
+            try:
+                count = synchronizer.sync_stock_list(session_id=session_id)
+            except Exception as e:
+                logger.error(f"同步股票列表失败: {e}")
+                sync_progress_manager.fail_sync(session_id, str(e))
+        
+        import threading
+        sync_thread = threading.Thread(target=run_sync)
+        sync_thread.daemon = True
+        sync_thread.start()
         
         return jsonify({
             'code': 200,
-            'message': '最新股票数据同步成功',
-            'data': result
+            'message': '同步任务已启动',
+            'data': {
+                'session_id': session_id
+            }
         })
     except Exception as e:
-        logger.error(f"同步最新股票数据失败: {e}")
+        logger.error(f"启动同步任务失败: {e}")
         return jsonify({
             'code': 500,
-            'message': f'同步最新股票数据失败: {str(e)}'
+            'message': f'启动同步任务失败: {str(e)}'
+        }), 500
+
+@app.route('/api/stocks/sync/progress/<session_id>')
+@login_required
+def get_sync_progress(session_id):
+    """获取同步进度"""
+    try:
+        progress = sync_progress_manager.get_progress(session_id)
+        if not progress:
+            return jsonify({
+                'code': 404,
+                'message': '同步会话不存在或已过期'
+            }), 404
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取进度成功',
+            'data': progress
+        })
+    except Exception as e:
+        logger.error(f"获取同步进度失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取同步进度失败: {str(e)}'
+        }), 500
+
+@app.route('/api/stocks/sync/single/<symbol>', methods=['POST'])
+@login_required
+def sync_single_stock(symbol):
+    """同步单只股票数据"""
+    try:
+        # 获取请求参数
+        days = request.json.get('days', 365) if request.json else 365
+        
+        # 创建同步管理器
+        synchronizer = StockDataSynchronizer()
+        
+        # 同步单只股票数据（基本信息 + 历史数据）
+        success = synchronizer.sync_single_stock_info(symbol)
+        if success:
+            count = synchronizer.sync_single_stock_daily_data(symbol, days=days)
+            return jsonify({
+                'code': 200,
+                'message': f'股票 {symbol} 同步完成',
+                'data': {
+                    'symbol': symbol,
+                    'info_synced': success,
+                    'history_count': count
+                }
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': f'股票 {symbol} 不存在或同步失败'
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"同步单只股票失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'同步失败: {str(e)}'
         }), 500
 
 
@@ -1919,8 +2029,14 @@ def internal_error(error):
 @app.route('/database')
 @login_required
 def database_page():
-    """数据库表管理页面"""
+    """数据库管理页面"""
     return render_template('database.html')
+
+@app.route('/stock-sync')
+@login_required
+def stock_sync_page():
+    """股票数据同步页面"""
+    return render_template('stock_sync.html')
 
 @app.route('/api/database/tables', methods=['GET'])
 @login_required
@@ -2167,19 +2283,36 @@ def api_long_term_analysis():
             'message': f'获取失败: {str(e)}'
         }), 500
 
+# 全局变量用于进度跟踪
+analysis_progress = {}
+
 # ================================
 # 价值投资分析API接口
 # ================================
+
+@app.route('/api/value_analysis/progress/<session_id>')
+@require_login
+def get_analysis_progress(session_id):
+    """获取分析进度"""
+    progress = analysis_progress.get(session_id, {})
+    return jsonify({
+        'code': 200,
+        'data': progress
+    })
 
 @app.route('/api/value_analysis/top_stocks')
 @require_login
 def get_top_value_stocks():
     """获取价值投资分析结果"""
     import os  # 确保在函数作用域内导入os
+    import uuid
+    
+    session_id = str(uuid.uuid4())
     
     try:
         limit_str = request.args.get('limit', '10')
         min_score = request.args.get('min_score', 0, type=int)
+        industry_filter = request.args.get('industry', '')  # 新增行业筛选参数
         
         # 处理"all"选项和数字限制
         if str(limit_str).lower() == 'all':
@@ -2187,6 +2320,15 @@ def get_top_value_stocks():
         else:
             limit = int(limit_str)
             limit = min(max(limit, 1), 1000)  # 放宽限制到1000
+        
+        # 初始化进度
+        analysis_progress[session_id] = {
+            'status': 'starting',
+            'current': 0,
+            'total': 0,
+            'percent': 0,
+            'message': '正在获取股票列表...'
+        }
         
         # 导入简化版价值投资分析器
         import sys
@@ -2205,26 +2347,48 @@ def get_top_value_stocks():
             stocks_df = analyzer.get_all_stocks(stock_limit)  # 获取股票数据
             
             if stocks_df.empty:
+                analysis_progress[session_id]['status'] = 'error'
+                analysis_progress[session_id]['message'] = '无法获取股票数据'
                 return jsonify({
                     'code': 404,
-                    'message': '无法获取股票数据'
+                    'message': '无法获取股票数据',
+                    'session_id': session_id
                 })
             
+            # 过滤股票
+            if industry_filter:
+                stocks_df = stocks_df[stocks_df['industry'] == industry_filter]
+            
+            total_stocks = len(stocks_df)
+            analysis_progress[session_id]['total'] = total_stocks
+            analysis_progress[session_id]['message'] = f'开始分析 {total_stocks} 只股票...'
+            
             qualified_stocks = []
+            current = 0
             
             for _, stock in stocks_df.iterrows():
                 try:
+                    current += 1
+                    symbol = stock.get('symbol', '未知')
+                    
+                    # 更新进度
+                    analysis_progress[session_id]['current'] = current
+                    analysis_progress[session_id]['percent'] = int((current / total_stocks) * 100)
+                    analysis_progress[session_id]['message'] = f'正在分析 {symbol}... ({current}/{total_stocks})'
+                    
                     result = analyzer.analyze_stock(stock.to_dict())
                     
                     if result.get('qualified', False) and 'error' not in result:
                         qualified_stocks.append(result)
                         
-                    if limit and len(qualified_stocks) >= limit:
-                        break
-                        
                 except Exception as e:
                     logger.error(f"分析股票失败 {stock.get('symbol', '未知')}: {e}")
                     continue
+            
+            # 完成分析
+            analysis_progress[session_id]['status'] = 'completed'
+            analysis_progress[session_id]['percent'] = 100
+            analysis_progress[session_id]['message'] = '分析完成'
             
             # 按得分排序并应用最小评分过滤
             qualified_stocks = [s for s in qualified_stocks if s.get('score', 0) >= min_score]
@@ -2237,7 +2401,8 @@ def get_top_value_stocks():
             return jsonify({
                 'code': 200,
                 'message': '获取成功',
-                'data': qualified_stocks
+                'data': qualified_stocks,
+                'session_id': session_id
             })
             
         except ImportError:
@@ -2295,10 +2460,14 @@ def get_top_value_stocks():
                 return jsonify({
                     'code': 200,
                     'message': '获取成功',
-                    'data': stocks
+                    'data': stocks,
+                    'session_id': session_id
                 })
             else:
-                # 如果没有现有文件，使用演示数据
+                # 如果没有现有文件，使用扩展的演示数据
+                analysis_progress[session_id]['status'] = 'completed'
+                analysis_progress[session_id]['percent'] = 100
+                analysis_progress[session_id]['message'] = '分析完成(使用演示数据)'
                 demo_data = [
                     {
                         'symbol': '000001',
@@ -2323,18 +2492,18 @@ def get_top_value_stocks():
                         }
                     },
                     {
-                        'symbol': '000066',
-                        'name': '中国长城',
-                        'industry': '计算机',
-                        'score': 85,
-                        'score_percent': 85.0,
-                        'recommendation': '强烈推荐',
+                        'symbol': '000002',
+                        'name': '万科A',
+                        'industry': '房地产',
+                        'score': 82,
+                        'score_percent': 82.0,
+                        'recommendation': '推荐',
                         'risk_level': '中低风险',
                         'key_metrics': {
-                            '市值': '45.0亿',
-                            'PE': 8.0,
-                            'PB': 2.5,
-                            '收盘价': 15.0
+                            '市值': '156.0亿',
+                            'PE': 8.5,
+                            'PB': 1.2,
+                            '收盘价': 15.8
                         },
                         'checks': {
                             '市值': {'score': 20, 'passed': True},
@@ -2345,22 +2514,154 @@ def get_top_value_stocks():
                         }
                     },
                     {
-                        'symbol': '000029',
-                        'name': '深深房A',
-                        'industry': '房地产',
-                        'score': 85,
-                        'score_percent': 85.0,
+                        'symbol': '000858',
+                        'name': '五粮液',
+                        'industry': '白酒',
+                        'score': 90,
+                        'score_percent': 90.0,
                         'recommendation': '强烈推荐',
-                        'risk_level': '中风险',
+                        'risk_level': '低风险',
                         'key_metrics': {
-                            '市值': '35.0亿',
-                            'PE': 12.0,
-                            'PB': 1.8,
-                            '收盘价': 8.5
+                            '市值': '245.0亿',
+                            'PE': 18.5,
+                            'PB': 4.2,
+                            '收盘价': 178.5
                         },
                         'checks': {
                             '市值': {'score': 20, 'passed': True},
                             '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '600519',
+                        'name': '贵州茅台',
+                        'industry': '白酒',
+                        'score': 95,
+                        'score_percent': 95.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '低风险',
+                        'key_metrics': {
+                            '市值': '890.0亿',
+                            'PE': 25.8,
+                            'PB': 8.5,
+                            '收盘价': 1685.0
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '601398',
+                        'name': '工商银行',
+                        'industry': '银行',
+                        'score': 88,
+                        'score_percent': 88.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '低风险',
+                        'key_metrics': {
+                            '市值': '456.0亿',
+                            'PE': 5.2,
+                            'PB': 0.8,
+                            '收盘价': 5.85
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '600036',
+                        'name': '招商银行',
+                        'industry': '银行',
+                        'score': 92,
+                        'score_percent': 92.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '低风险',
+                        'key_metrics': {
+                            '市值': '298.0亿',
+                            'PE': 7.8,
+                            'PB': 1.25,
+                            '收盘价': 42.5
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '000066',
+                        'name': '中国长城',
+                        'industry': '计算机',
+                        'score': 78,
+                        'score_percent': 78.0,
+                        'recommendation': '推荐',
+                        'risk_level': '中低风险',
+                        'key_metrics': {
+                            '市值': '45.0亿',
+                            'PE': 12.0,
+                            'PB': 2.8,
+                            '收盘价': 15.5
+                        },
+                        'checks': {
+                            '市值': {'score': 15, 'passed': True},
+                            '估值': {'score': 25, 'passed': True},
+                            '价格': {'score': 18, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 5, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '000333',
+                        'name': '美的集团',
+                        'industry': '家电',
+                        'score': 87,
+                        'score_percent': 87.0,
+                        'recommendation': '强烈推荐',
+                        'risk_level': '低风险',
+                        'key_metrics': {
+                            '市值': '189.0亿',
+                            'PE': 12.5,
+                            'PB': 2.8,
+                            '收盘价': 65.8
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 30, 'passed': True},
+                            '价格': {'score': 20, 'passed': True},
+                            '行业': {'score': 15, 'passed': True},
+                            '流动性': {'score': 10, 'passed': True}
+                        }
+                    },
+                    {
+                        'symbol': '600887',
+                        'name': '伊利股份',
+                        'industry': '食品饮料',
+                        'score': 83,
+                        'score_percent': 83.0,
+                        'recommendation': '推荐',
+                        'risk_level': '中低风险',
+                        'key_metrics': {
+                            '市值': '156.0亿',
+                            'PE': 15.2,
+                            'PB': 3.8,
+                            '收盘价': 28.5
+                        },
+                        'checks': {
+                            '市值': {'score': 20, 'passed': True},
+                            '估值': {'score': 28, 'passed': True},
                             '价格': {'score': 20, 'passed': True},
                             '行业': {'score': 15, 'passed': True},
                             '流动性': {'score': 10, 'passed': True}
@@ -2378,8 +2679,17 @@ def get_top_value_stocks():
                 return jsonify({
                     'code': 200,
                     'message': '获取成功',
-                    'data': demo_data
+                    'data': demo_data,
+                    'session_id': session_id
                 })
+                
+    except Exception as e:
+        logger.error(f"价值投资分析API错误: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '分析过程中发生错误',
+            'session_id': session_id
+        })
             
     except Exception as e:
         logger.error(f"获取价值投资分析结果失败: {e}")
@@ -2479,6 +2789,99 @@ def quick_value_scan():
         return jsonify({
             'code': 500,
             'message': f'扫描失败: {str(e)}'
+        }), 500
+
+@app.route('/api/akshare/interfaces/<interface_name>/data', methods=['GET'])
+@login_required
+def get_interface_data(interface_name):
+    """获取接口数据的分页显示"""
+    try:
+        # 获取分页参数
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 20))
+        
+        # 创建表名
+        table_name = f"akshare_{interface_name}"
+        table_name = table_name.replace('-', '_').replace('.', '_')
+        
+        # 检查表是否存在
+        check_query = """
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name=?
+        """
+        table_exists = db_manager.query(check_query, [table_name])
+        
+        if not table_exists:
+            return jsonify({
+                'code': 404,
+                'message': f'接口数据表不存在: {table_name}',
+                'suggestion': '请先下载该接口的数据到数据库'
+            }), 404
+        
+        # 获取总记录数
+        count_query = f"SELECT COUNT(*) as count FROM {table_name}"
+        total_records = db_manager.query(count_query)[0]['count']
+        
+        if total_records == 0:
+            return jsonify({
+                'code': 200,
+                'message': '数据为空',
+                'data': {
+                    'records': [],
+                    'columns': [],
+                    'total_records': 0,
+                    'page': page,
+                    'page_size': page_size,
+                    'table_name': table_name
+                }
+            })
+        
+        # 获取列名
+        columns_query = f"PRAGMA table_info({table_name})"
+        columns_info = db_manager.query(columns_query)
+        columns = [col['name'] for col in columns_info]
+        
+        # 计算分页偏移
+        offset = (page - 1) * page_size
+        
+        # 获取分页数据
+        data_query = f"""
+            SELECT * FROM {table_name}
+            LIMIT {page_size} OFFSET {offset}
+        """
+        records = db_manager.query(data_query)
+        
+        # 将记录转换为字典列表
+        records_list = []
+        for record in records:
+            record_dict = {}
+            for col in columns:
+                value = record.get(col)
+                # 处理日期时间格式
+                if hasattr(value, 'strftime'):
+                    value = value.strftime('%Y-%m-%d %H:%M:%S')
+                record_dict[col] = str(value) if value is not None else ''
+            records_list.append(record_dict)
+        
+        return jsonify({
+            'code': 200,
+            'message': '获取数据成功',
+            'data': {
+                'records': records_list,
+                'columns': columns,
+                'total_records': total_records,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': (total_records + page_size - 1) // page_size,
+                'table_name': table_name
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取接口数据失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'获取数据失败: {str(e)}'
         }), 500
 
 if __name__ == '__main__':

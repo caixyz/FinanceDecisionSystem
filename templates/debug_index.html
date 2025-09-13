@@ -383,13 +383,19 @@
             showLoading('searchResult');
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/list?keyword=${encodeURIComponent(keyword)}&limit=20`);
-                const result = await response.json();
+                // 先获取完整的搜索结果总数
+                const countResponse = await fetch(`${API_BASE}/stocks/list?keyword=${encodeURIComponent(keyword)}&limit=10000`);
+                const countResult = await countResponse.json();
                 
-                if (result.code === 200) {
-                    displaySearchResults(result.data.stocks);
+                if (countResult.code === 200) {
+                    // 存储完整的搜索结果用于显示总数
+                    window.searchResults = {
+                        stocks: countResult.data.stocks,
+                        total_count: countResult.data.stocks.length
+                    };
+                    displaySearchResults(countResult.data.stocks.slice(0, 20)); // 只显示前20条
                 } else {
-                    showError('searchResult', result.message);
+                    showError('searchResult', countResult.message);
                 }
             } catch (error) {
                 showError('searchResult', `搜索失败: ${error.message}`);
@@ -398,13 +404,20 @@
         
         function displaySearchResults(stocks) {
             const container = document.getElementById('searchResult');
-            
+
             if (stocks.length === 0) {
                 container.innerHTML = '<div class="error">未找到匹配的股票</div>';
                 return;
             }
+
+            // 获取完整的搜索结果总数（不仅仅是当前页）
+            let totalCount = stocks.length;
+            if (window.searchResults && window.searchResults.total_count) {
+                totalCount = window.searchResults.total_count;
+            }
             
-            let html = '<div class="grid">';
+            let html = '<h3 style="margin-bottom: 1rem;">搜索结果</h3>' +
+                '<div class="grid">';
             stocks.forEach(stock => {
                 html += `
                     <div class="metric" style="text-align: left;">
@@ -414,6 +427,18 @@
                 `;
             });
             html += '</div>';
+            
+            // 添加结果总数
+            html += `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 1rem; background-color: #f8f9fa; border-radius: 8px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold;">
+                        结果总数: ${totalCount}
+                    </div>
+                    <div style="color: #666; font-size: 0.9rem;">
+                        显示 ${stocks.length} 条记录
+                    </div>
+                </div>
+            `;
             
             container.innerHTML = html;
         }

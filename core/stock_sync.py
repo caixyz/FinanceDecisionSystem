@@ -14,6 +14,7 @@ from utils.logger import logger
 from core.data_source import DataSource
 from core.storage import db_manager
 from core.analyzer import TechnicalAnalyzer
+from core.sync_progress import sync_progress_manager
 
 
 class StockDataSynchronizer:
@@ -25,7 +26,7 @@ class StockDataSynchronizer:
         self.analyzer = TechnicalAnalyzer()
         logger.info("股票数据同步管理器初始化完成")
     
-    def sync_stock_list(self):
+    def sync_stock_list(self, session_id: str = None):
         """同步股票列表，包含完整的股票信息和财务数据"""
         try:
             logger.info("开始同步股票列表，包含财务数据...")
@@ -34,7 +35,16 @@ class StockDataSynchronizer:
             stock_list = self.data_source.get_stock_list()
             if stock_list is None or stock_list.empty:
                 logger.error("获取股票列表失败")
+                if session_id:
+                    sync_progress_manager.fail_sync(session_id, "获取股票列表失败")
                 return 0
+            
+            total_count = len(stock_list)
+            logger.info(f"共 {total_count} 只股票需要同步")
+            
+            # 创建进度会话
+            if session_id:
+                sync_progress_manager.create_session('list', total_count)
             
             # 基于股票代码前缀的行业分类
             def get_industry_by_symbol(symbol):
@@ -78,10 +88,18 @@ class StockDataSynchronizer:
             
             # 准备股票信息
             stock_data = []
-            for _, row in stock_list.iterrows():
+            success_count = 0
+            
+            for idx, (_, row) in enumerate(stock_list.iterrows(), 1):
                 symbol = str(row.get('代码', row.get('symbol', ''))).zfill(6)
                 name = row.get('名称', row.get('name', ''))
                 industry = get_industry_by_symbol(symbol)
+                
+                # 更新进度
+                if session_id:
+                    sync_progress_manager.update_progress(
+                        session_id, idx, symbol, f"正在同步 {symbol} 的基本信息..."
+                    )
                 
                 # 获取财务数据
                 spot_info = spot_dict.get(symbol, {})
@@ -103,10 +121,8 @@ class StockDataSynchronizer:
                     'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
                 stock_data.append(stock_info)
-            
-            # 保存到数据库
-            success_count = 0
-            for stock in stock_data:
+                
+                # 保存到数据库
                 try:
                     self.db_manager.save_stock_info(stock['symbol'], stock)
                     success_count += 1
@@ -118,19 +134,27 @@ class StockDataSynchronizer:
                     logger.error(f"保存股票信息失败 {stock['symbol']}: {e}")
             
             logger.info(f"股票列表同步完成，共同步 {success_count} 只股票，包含完整财务数据")
+            
+            # 完成同步
+            if session_id:
+                sync_progress_manager.complete_sync(session_id, success_count, total_count - success_count)
+            
             return success_count
             
         except Exception as e:
             logger.error(f"同步股票列表时出错: {e}")
+            if session_id:
+                sync_progress_manager.fail_sync(session_id, str(e))
             return 0
     
-    def sync_all_stock_daily_data(self, start_date=None, end_date=None, symbols=None):
+    def sync_all_stock_daily_data(self, start_date=None, end_date=None, symbols=None, session_id: str = None):
         """
         同步所有股票的历史行情数据
         Args:
             start_date: 开始日期，格式：YYYY-MM-DD，默认为None表示从数据库中最早日期开始
             end_date: 结束日期，格式：YYYY-MM-DD，默认为None表示今天
             symbols: 指定股票代码列表，默认为None表示同步所有股票
+            session_id: 进度会话ID
         """
         try:
             if symbols is None:
@@ -140,9 +164,19 @@ class StockDataSynchronizer:
             total_count = len(symbols)
             logger.info(f"开始同步 {total_count} 只股票的历史行情数据...")
             
+            # 创建进度会话
+            if session_id:
+                sync_progress_manager.create_session('history', total_count)
+            
             success_count = 0
             for i, symbol in enumerate(symbols, 1):
                 try:
+                    # 更新进度
+                    if session_id:
+                        sync_progress_manager.update_progress(
+                            session_id, i, symbol, f"正在同步 {symbol} 的历史数据..."
+                        )
+                    
                     # 同步单只股票的历史数据
                     result = self.sync_single_stock_daily_data(symbol, start_date, end_date)
                     if result > 0:
@@ -156,22 +190,31 @@ class StockDataSynchronizer:
                     continue
             
             logger.info(f"历史行情数据同步完成，共成功同步 {success_count}/{total_count} 只股票")
+            
+            # 完成同步
+            if session_id:
+                sync_progress_manager.complete_sync(session_id, success_count, total_count - success_count)
+            
             return success_count
             
         except Exception as e:
-            logging.error(f"同步历史行情数据时出错: {e}")
+            logger.error(f"同步历史行情数据时出错: {e}")
+            if session_id:
+                sync_progress_manager.fail_sync(session_id, str(e))
             return 0
     
     def sync_latest_stock_data(self, 
                               days: int = 30,
                               batch_size: int = 50,
-                              delay: float = 1.0) -> Dict[str, int]:
+                              delay: float = 1.0,
+                              session_id: str = None) -> Dict[str, int]:
         """
         同步最新的股票数据（增量更新）
         Args:
             days: 获取最近多少天的数据
             batch_size: 批处理大小
             delay: 请求间隔（秒）
+            session_id: 进度会话ID
         Returns:
             Dict[str, int]: 同步统计信息
         """
@@ -182,65 +225,74 @@ class StockDataSynchronizer:
             symbols = self._get_all_stock_symbols()
             if not symbols:
                 logger.warning("数据库中没有股票信息")
+                if session_id:
+                    sync_progress_manager.fail_sync(session_id, "数据库中没有股票信息")
                 return {'total': 0, 'success': 0, 'failed': 0}
             
-            logger.info(f"共 {len(symbols)} 只股票需要同步")
+            total_count = len(symbols)
+            logger.info(f"共 {total_count} 只股票需要同步")
+            
+            # 创建进度会话
+            if session_id:
+                sync_progress_manager.create_session('latest', total_count)
             
             # 分批处理
-            total_count = len(symbols)
             success_count = 0
             failed_count = 0
             
-            for i in range(0, total_count, batch_size):
-                batch_symbols = symbols[i:i + batch_size]
-                logger.info(f"处理批次 {i//batch_size + 1}/{(total_count-1)//batch_size + 1}，共 {len(batch_symbols)} 只股票")
-                
-                for symbol in batch_symbols:
-                    try:
-                        # 检查数据库中最新的数据日期
-                        latest_date = self._get_latest_stock_date(symbol)
+            for i, symbol in enumerate(symbols, 1):
+                try:
+                    # 更新进度
+                    if session_id:
+                        sync_progress_manager.update_progress(
+                            session_id, i, symbol, f"正在同步 {symbol}..."
+                        )
+                    
+                    # 检查数据库中最新的数据日期
+                    latest_date = self._get_latest_stock_date(symbol)
+                    
+                    # 如果数据库中没有数据或数据不是最新的，则获取最近的数据
+                    if latest_date is None:
+                        # 获取最近days天的数据
+                        df = self.data_source.get_stock_data(symbol, days=days)
+                    else:
+                        # 只获取最新数据
+                        start_date = (latest_date + timedelta(days=1)).strftime("%Y%m%d")
+                        end_date = datetime.now().strftime("%Y%m%d")
                         
-                        # 如果数据库中没有数据或数据不是最新的，则获取最近的数据
-                        if latest_date is None:
-                            # 获取最近days天的数据
-                            df = self.data_source.get_stock_data(symbol, days=days)
+                        if start_date <= end_date:
+                            df = self.data_source.get_stock_data(
+                                symbol, 
+                                start_date=start_date, 
+                                end_date=end_date
+                            )
                         else:
-                            # 只获取最新数据
-                            start_date = (latest_date + timedelta(days=1)).strftime("%Y%m%d")
-                            end_date = datetime.now().strftime("%Y%m%d")
-                            
-                            if start_date <= end_date:
-                                df = self.data_source.get_stock_data(
-                                    symbol, 
-                                    start_date=start_date, 
-                                    end_date=end_date
-                                )
-                            else:
-                                # 数据已经是最新的
-                                logger.debug(f"股票 {symbol} 数据已是最新的")
-                                success_count += 1
-                                continue
-                        
-                        if not df.empty:
-                            # 保存到数据库
-                            self.db_manager.save_stock_daily_data(symbol, df)
+                            # 数据已经是最新的
+                            logger.debug(f"股票 {symbol} 数据已是最新的")
                             success_count += 1
-                            logger.debug(f"股票 {symbol} 最新数据同步成功，共 {len(df)} 条记录")
-                        else:
-                            logger.warning(f"股票 {symbol} 未获取到最新数据")
-                            success_count += 1  # 没有新数据也算成功
-                        
-                        # 延时避免请求过快
+                            continue
+                    
+                    if not df.empty:
+                        # 保存到数据库
+                        self.db_manager.save_stock_daily_data(symbol, df)
+                        success_count += 1
+                        logger.debug(f"股票 {symbol} 最新数据同步成功，共 {len(df)} 条记录")
+                    else:
+                        logger.warning(f"股票 {symbol} 未获取到最新数据")
+                        success_count += 1  # 没有新数据也算成功
+                    
+                    # 延时避免请求过快
+                    if delay > 0:
                         time.sleep(delay)
                         
-                    except Exception as e:
-                        logger.error(f"同步股票 {symbol} 最新数据时出错: {e}")
-                        failed_count += 1
-                        continue
+                except Exception as e:
+                    logger.error(f"同步股票 {symbol} 最新数据时出错: {e}")
+                    failed_count += 1
+                    continue
                 
                 # 显示进度
-                processed = min(i + batch_size, total_count)
-                logger.info(f"进度: {processed}/{total_count} ({processed/total_count*100:.1f}%)")
+                if i % 10 == 0 or i == total_count:
+                    logger.info(f"进度: {i}/{total_count} ({i/total_count*100:.1f}%)")
             
             result = {
                 'total': total_count,
@@ -248,11 +300,17 @@ class StockDataSynchronizer:
                 'failed': failed_count
             }
             
+            # 完成同步
+            if session_id:
+                sync_progress_manager.complete_sync(session_id, success_count, failed_count)
+            
             logger.info(f"最新股票数据同步完成: {result}")
             return result
             
         except Exception as e:
             logger.error(f"同步最新股票数据失败: {e}")
+            if session_id:
+                sync_progress_manager.fail_sync(session_id, str(e))
             raise
     
     def search_stocks(self, 
@@ -385,22 +443,43 @@ class StockDataSynchronizer:
     
     def sync_single_stock_info(self, symbol: str) -> bool:
         """
-        同步单只股票的基本信息
+        同步单只股票的基本信息，包含实时市场数据
         Args:
             symbol: 股票代码
         Returns:
             bool: 同步是否成功
         """
         try:
-            logger.info(f"开始同步股票 {symbol} 的基本信息...")
+            logger.info(f"开始同步股票 {symbol} 的基本信息和实时数据...")
             
-            # 获取股票详细信息
+            # 获取股票基本信息
             stock_info = self.data_source.get_stock_info(symbol)
             if not stock_info:
                 logger.warning(f"无法获取股票 {symbol} 的基本信息")
                 return False
             
-            # 准备股票信息 - 使用数据源返回的中文字段名
+            # 获取实时市场数据
+            try:
+                realtime_data = self.data_source.stock_fetcher.get_stock_realtime()
+                if not realtime_data.empty:
+                    # 查找当前股票的实时数据
+                    stock_realtime = realtime_data[realtime_data['代码'] == symbol]
+                    if not stock_realtime.empty:
+                        realtime_row = stock_realtime.iloc[0]
+                    else:
+                        # 尝试匹配不同格式的代码
+                        symbol_str = str(symbol).zfill(6)
+                        stock_realtime = realtime_data[realtime_data['代码'] == symbol_str]
+                        if not stock_realtime.empty:
+                            realtime_row = stock_realtime.iloc[0]
+                        else:
+                            realtime_row = None
+                else:
+                    realtime_row = None
+            except Exception as e:
+                logger.warning(f"获取实时数据失败: {e}")
+                realtime_row = None
+            
             def safe_float(value, default=0.0):
                 """安全地将值转换为浮点数"""
                 if value is None or value == '' or str(value).upper() == 'N/A':
@@ -410,23 +489,44 @@ class StockDataSynchronizer:
                 except (ValueError, TypeError):
                     return default
             
+            # 从基本信息获取数据
             stock_data = {
                 'symbol': symbol,
-                'name': str(stock_info.get('股票简称', '')),
-                'industry': str(stock_info.get('行业', '')),
-                'market': str(stock_info.get('市场', '')),
-                'list_date': str(stock_info.get('上市时间', '')),
+                'name': str(stock_info.get('股票简称', '') or stock_info.get('简称', '')),
+                'industry': str(stock_info.get('行业', '') or stock_info.get('所属行业', '')),
+                'market': str(stock_info.get('市场', '') or stock_info.get('所属市场', '')),
+                'list_date': str(stock_info.get('上市时间', '') or stock_info.get('上市日期', '')),
                 'market_cap': safe_float(stock_info.get('总市值', 0)),
-                'pe_ratio': 0.0,  # 数据源不提供PE和PB，使用默认值
-                'pb_ratio': 0.0,
-                'close': 0.0,     # 数据源不提供当前价，使用默认值
+                'pe_ratio': safe_float(stock_info.get('市盈率', 0)),
+                'pb_ratio': safe_float(stock_info.get('市净率', 0)),
+                'close': 0.0,
                 'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
+            
+            # 从实时数据补充缺失字段
+            if realtime_row is not None:
+                # 使用实时数据更新价格和财务指标
+                stock_data['close'] = safe_float(realtime_row.get('最新价', 0))
+                stock_data['market_cap'] = safe_float(realtime_row.get('总市值', stock_data['market_cap']))
+                stock_data['pe_ratio'] = safe_float(realtime_row.get('市盈率', stock_data['pe_ratio']))
+                stock_data['pb_ratio'] = safe_float(realtime_row.get('市净率', stock_data['pb_ratio']))
+                
+                # 如果基本信息中没有行业，尝试从实时数据获取
+                if not stock_data['industry'] or stock_data['industry'] == '':
+                    stock_data['industry'] = str(realtime_row.get('行业', ''))
+            else:
+                # 如果实时数据不可用，尝试从最新历史数据获取收盘价
+                try:
+                    latest_data = self.data_source.get_stock_data(symbol, days=1)
+                    if not latest_data.empty:
+                        stock_data['close'] = safe_float(latest_data.iloc[-1]['close'])
+                except Exception as e:
+                    logger.warning(f"无法获取历史收盘价: {e}")
             
             # 保存到数据库
             self.db_manager.save_stock_info(symbol, stock_data)
             
-            logger.info(f"股票 {symbol} 基本信息同步完成")
+            logger.info(f"股票 {symbol} 基本信息和实时数据同步完成: {stock_data}")
             return True
             
         except Exception as e:

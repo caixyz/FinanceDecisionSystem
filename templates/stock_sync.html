@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票数据同步 - 金融决策系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css?v=20240610" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css?v=20240610" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        .sync-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+        
+        .sync-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .sync-card {
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .sync-card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            padding: 1rem 1.5rem;
+        }
+        
+        .progress-container {
+            margin: 1.5rem 0;
+        }
+        
+        .progress {
+            height: 25px;
+            border-radius: 12px;
+            background-color: #e9ecef;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .sync-status {
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        
+        .sync-status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .sync-status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .sync-status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .btn-sync {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 6px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-sync:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-sync:disabled {
+            opacity: 0.7;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .form-control, .form-select {
+            border-radius: 6px;
+            border: 1px solid #ced4da;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up"></i> 金融决策系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/database">数据库</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/stock-sync">股票同步</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="sync-container">
+        <div class="sync-header">
+            <h1 class="h3 mb-2">股票数据同步</h1>
+            <p class="text-muted">实时同步股票列表、历史数据和最新行情</p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card sync-card">
+                    <div class="sync-card-header">
+                        <h5 class="mb-0"><i class="bi bi-list-check"></i> 股票列表同步</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">同步最新的股票代码和基本信息</p>
+                        <button class="btn btn-sync text-white" onclick="startSync('list')" id="sync-list-btn">
+                            <i class="bi bi-arrow-clockwise"></i> 开始同步
+                        </button>
+                        <div id="list-progress" style="display: none;" class="mt-3">
+                            <div class="progress-container">
+                                <div class="progress">
+                                    <div class="progress-bar" id="list-progress-bar" role="progressbar" style="width: 0%">
+                                        0%
+                                    </div>
+                                </div>
+                                <div class="progress-info">
+                                    <span id="list-current">0</span> / <span id="list-total">0</span>
+                                    <span id="list-status">准备中...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card sync-card">
+                    <div class="sync-card-header">
+                        <h5 class="mb-0"><i class="bi bi-calendar-range"></i> 历史数据同步</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">同步天数</label>
+                            <select class="form-select" id="history-days">
+                                <option value="30">30天</option>
+                                <option value="90">90天</option>
+                                <option value="180">180天</option>
+                                <option value="365" selected>365天</option>
+                                <option value="730">2年</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-sync text-white" onclick="startSync('history')" id="sync-history-btn">
+                            <i class="bi bi-arrow-clockwise"></i> 开始同步
+                        </button>
+                        <div id="history-progress" style="display: none;" class="mt-3">
+                            <div class="progress-container">
+                                <div class="progress">
+                                    <div class="progress-bar" id="history-progress-bar" role="progressbar" style="width: 0%">
+                                        0%
+                                    </div>
+                                </div>
+                                <div class="progress-info">
+                                    <span id="history-current">0</span> / <span id="history-total">0</span>
+                                    <span id="history-status">准备中...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card sync-card">
+            <div class="sync-card-header">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> 最新数据同步</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">同步天数</label>
+                        <select class="form-select" id="latest-days">
+                            <option value="1">1天</option>
+                            <option value="7">7天</option>
+                            <option value="30" selected>30天</option>
+                            <option value="60">60天</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">批次大小</label>
+                        <select class="form-select" id="latest-batch">
+                            <option value="20">20</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">延迟(秒)</label>
+                        <select class="form-select" id="latest-delay">
+                            <option value="0.5">0.5</option>
+                            <option value="1" selected>1</option>
+                            <option value="2">2</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="text-center mt-4">
+                    <button class="btn btn-sync text-white" onclick="startSync('latest')" id="sync-latest-btn">
+                        <i class="bi bi-arrow-clockwise"></i> 开始同步
+                    </button>
+                </div>
+                <div id="latest-progress" style="display: none;" class="mt-4">
+                    <div class="progress-container">
+                        <div class="progress">
+                            <div class="progress-bar" id="latest-progress-bar" role="progressbar" style="width: 0%">
+                                0%
+                            </div>
+                        </div>
+                        <div class="progress-info">
+                            <span id="latest-current">0</span> / <span id="latest-total">0</span>
+                            <span id="latest-status">准备中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="sync-status" style="display: none;"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let progressIntervals = {};
+
+        function startSync(type) {
+            const button = document.getElementById(`sync-${type}-btn`);
+            const progressDiv = document.getElementById(`${type}-progress`);
+            const statusDiv = document.getElementById('sync-status');
+            
+            // 重置状态
+            button.disabled = true;
+            progressDiv.style.display = 'block';
+            statusDiv.style.display = 'none';
+            
+            // 获取参数
+            let data = {};
+            if (type === 'history') {
+                data.days = parseInt(document.getElementById('history-days').value);
+            } else if (type === 'latest') {
+                data.days = parseInt(document.getElementById('latest-days').value);
+                data.batch_size = parseInt(document.getElementById('latest-batch').value);
+                data.delay = parseFloat(document.getElementById('latest-delay').value);
+            }
+
+            // 调用API
+            let endpoint;
+            switch(type) {
+                case 'list':
+                    endpoint = '/api/stocks/sync/list';
+                    break;
+                case 'history':
+                    endpoint = '/api/stocks/sync/history';
+                    break;
+                case 'latest':
+                    endpoint = '/api/stocks/sync/latest';
+                    break;
+            }
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.code === 200) {
+                    const sessionId = result.data.session_id;
+                    startProgressTracking(type, sessionId);
+                } else {
+                    throw new Error(result.message);
+                }
+            })
+            .catch(error => {
+                showStatus('error', `同步失败: ${error.message}`);
+                resetButton(type);
+            });
+        }
+
+        function startProgressTracking(type, sessionId) {
+            // 清除之前的interval
+            if (progressIntervals[type]) {
+                clearInterval(progressIntervals[type]);
+            }
+
+            progressIntervals[type] = setInterval(() => {
+                fetch(`/api/stocks/sync/progress/${sessionId}`)
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.code === 200) {
+                            updateProgress(type, result.data);
+                            
+                            // 检查是否完成
+                            if (result.data.status === 'completed' || result.data.status === 'failed') {
+                                clearInterval(progressIntervals[type]);
+                                resetButton(type);
+                                
+                                if (result.data.status === 'completed') {
+                                    // 强制从完成状态的数据中获取统计信息
+                                    const progressData = result.data;
+                                    
+                                    // 确保有total字段，如果没有则使用total_stocks
+                                    let total = 0;
+                                    if (progressData.total !== undefined) {
+                                        total = progressData.total;
+                                    } else if (progressData.total_stocks !== undefined) {
+                                        total = progressData.total_stocks;
+                                    }
+                                    
+                                    // 确保有success字段，如果没有则计算
+                                    let success = 0;
+                                    if (progressData.success !== undefined) {
+                                        success = progressData.success;
+                                    } else {
+                                        success = total - (progressData.failed || 0);
+                                    }
+                                    
+                                    // 确保有failed字段
+                                    const failed = progressData.failed !== undefined ? progressData.failed : 0;
+                                    
+                                    // 如果所有字段都为0，使用备用方案
+                                    if (total === 0 && success === 0 && failed === 0 && progressData.total_stocks) {
+                                        total = progressData.total_stocks;
+                                        success = total - failed;
+                                    }
+                                    
+                                    showStatus('success', `✅ ${getTypeName(type)}同步完成！ 总计: ${total || 0}只股票 成功: ${success || 0}只 失败: ${failed || 0}只`);
+                                } else {
+                                    showStatus('error', `${getTypeName(type)}同步失败: ${result.data.message}`);
+                                }
+                            }
+                        } else {
+                            clearInterval(progressIntervals[type]);
+                            resetButton(type);
+                            showStatus('error', '获取进度失败');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取进度失败:', error);
+                        clearInterval(progressIntervals[type]);
+                        resetButton(type);
+                        showStatus('error', '获取进度失败');
+                    });
+            }, 1000);
+        }
+
+        function updateProgress(type, progress) {
+            const progressBar = document.getElementById(`${type}-progress-bar`);
+            const currentSpan = document.getElementById(`${type}-current`);
+            const totalSpan = document.getElementById(`${type}-total`);
+            const statusSpan = document.getElementById(`${type}-status`);
+
+            const total = progress.total || progress.total_stocks || 0;
+            const current = progress.current || progress.current_stock || 0;
+            const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+            
+            progressBar.style.width = `${percentage}%`;
+            progressBar.textContent = `${percentage}%`;
+            currentSpan.textContent = current;
+            totalSpan.textContent = total;
+            statusSpan.textContent = progress.message || '同步中...';
+        }
+
+        function resetButton(type) {
+            const button = document.getElementById(`sync-${type}-btn`);
+            button.disabled = false;
+        }
+
+        function getTypeName(type) {
+            switch(type) {
+                case 'list': return '股票列表';
+                case 'history': return '历史数据';
+                case 'latest': return '最新数据';
+                default: return '数据';
+            }
+        }
+
+        function showStatus(type, message) {
+            const statusDiv = document.getElementById('sync-status');
+            statusDiv.className = `sync-status ${type}`;
+            statusDiv.innerHTML = `
+                <i class="bi ${type === 'success' ? 'bi-check-circle' : type === 'error' ? 'bi-exclamation-circle' : 'bi-info-circle'}"></i>
+                ${message}
+            `;
+            statusDiv.style.display = 'block';
+            
+            // 5秒后自动隐藏成功消息
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // 页面加载时检查是否有正在进行的同步
+        window.addEventListener('load', function() {
+            // 可以在这里检查是否有未完成的同步
+        });
+    </script>
+</body>
+</html>
