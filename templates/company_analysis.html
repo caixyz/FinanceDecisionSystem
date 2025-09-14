@@ -369,9 +369,49 @@
             loadStockData(symbol);
         }
 
+        // 更新公司基本信息
+        function updateCompanyInfo(companyData) {
+            // 更新页面标题
+            document.querySelector('.company-info h1').textContent = companyData.name || '公司分析';
+            
+            // 更新股票代码
+            document.querySelector('.company-symbol').textContent = `股票代码: ${companyData.symbol}`;
+            
+            // 更新行业
+            document.querySelector('.company-industry').textContent = companyData.industry || '未知行业';
+            
+            // 更新关键指标
+            const statValues = document.querySelectorAll('.stat-value');
+            const statLabels = ['最新股价', '市盈率', '市净率', '总市值'];
+            
+            // 最新股价
+            statValues[0].textContent = `¥${(companyData.close || 0).toFixed(2)}`;
+            
+            // 市盈率
+            statValues[1].textContent = (companyData.pe_ratio || 0).toFixed(2);
+            
+            // 市净率
+            statValues[2].textContent = (companyData.pb_ratio || 0).toFixed(2);
+            
+            // 总市值（亿元）
+            const marketCap = (companyData.market_cap || 0) / 100000000;
+            statValues[3].textContent = `${marketCap.toFixed(0)}亿`;
+            
+            // 更新财务数据表格
+            const tableRows = document.querySelectorAll('#financialTable tbody tr');
+            if (tableRows.length >= 3) {
+                tableRows[0].cells[1].textContent = (companyData.pe_ratio || 0).toFixed(2);
+                tableRows[1].cells[1].textContent = (companyData.pb_ratio || 0).toFixed(2);
+                tableRows[2].cells[1].textContent = `${marketCap.toFixed(0)}亿`;
+            }
+        }
+
         // 加载股票数据
         async function loadStockData(symbol) {
             try {
+                // 显示加载状态
+                document.getElementById('loading').style.display = 'block';
+                
                 // 添加认证头
                 const response = await fetch(`/api/company/${symbol}/data`, {
                     headers: {
@@ -380,18 +420,69 @@
                 });
                 const data = await response.json();
                 
+                // 隐藏加载状态
+                document.getElementById('loading').style.display = 'none';
+                
                 if (data.code === 200 || data.success) {
+                    // 更新公司基本信息
+                    updateCompanyInfo(data.data.company);
+                    
+                    // 渲染图表
                     renderCharts(data.data);
                 } else {
                     showMessage(data.message || '加载数据失败', 'error');
                 }
             } catch (error) {
+                document.getElementById('loading').style.display = 'none';
                 showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+
+        // 同步公司数据
+        async function syncCompanyData() {
+            const symbol = getSymbolFromUrl();
+            
+            if (!confirm(`确认同步 ${symbol} 的最新数据吗？\n\n这将更新：\n• 股票基本信息\n• 最新价格数据\n• 历史交易数据\n• 技术指标`)) {
+                return;
+            }
+            
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').querySelector('p').textContent = '正在同步数据...';
+                
+                const response = await fetch(`/api/company/${symbol}/sync`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 200 || result.success) {
+                    showMessage('数据同步成功！', 'success');
+                    
+                    // 重新加载数据
+                    setTimeout(() => {
+                        loadStockData(symbol);
+                    }, 1000);
+                } else {
+                    showMessage(result.message || '同步失败', 'error');
+                }
+            } catch (error) {
+                showMessage('同步失败: ' + error.message, 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
             }
         }
 
         // 渲染图表
         function renderCharts(data) {
+            // 清除旧图表
+            Chart.helpers.each(Chart.instances, (instance) => {
+                instance.destroy();
+            });
+            
             // 股价走势图
             renderPriceChart(data.prices);
             
@@ -402,9 +493,30 @@
             renderIndicatorChart(data.indicators);
         }
 
+        // 显示消息
+        function showMessage(message, type = 'info') {
+            const messageArea = document.getElementById('messageArea');
+            const div = document.createElement('div');
+            div.className = `message-overlay ${type}`;
+            div.textContent = message;
+            
+            messageArea.appendChild(div);
+            
+            setTimeout(() => {
+                div.remove();
+            }, 3000);
+        }
+
         // 股价走势图
         function renderPriceChart(prices) {
             const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            if (!prices || prices.length === 0) {
+                ctx.font = '16px Arial';
+                ctx.fillText('暂无数据', 10, 50);
+                return;
+            }
+            
             const labels = prices.map(p => p.date);
             const pricesData = prices.map(p => p.close);
 
@@ -450,6 +562,13 @@
         // 成交量图表
         function renderVolumeChart(prices) {
             const ctx = document.getElementById('volumeChart').getContext('2d');
+            
+            if (!prices || prices.length === 0) {
+                ctx.font = '16px Arial';
+                ctx.fillText('暂无数据', 10, 50);
+                return;
+            }
+            
             const labels = prices.map(p => p.date);
             const volumes = prices.map(p => p.volume);
 
@@ -493,65 +612,64 @@
 
         // 技术指标图表
         function renderIndicatorChart(indicators) {
-            if (!indicators || indicators.length === 0) return;
+            if (!indicators || indicators.length === 0) {
+                const ctx = document.getElementById('indicatorChart').getContext('2d');
+                ctx.font = '16px Arial';
+                ctx.fillText('暂无技术指标数据', 10, 50);
+                return;
+            }
 
             const ctx = document.getElementById('indicatorChart').getContext('2d');
             const labels = indicators.map(i => i.date);
             
             const datasets = [];
             
-            // 检查MACD指标
-            if (indicators[0].macd !== undefined) {
-                datasets.push({
-                    label: 'MACD',
-                    data: indicators.map(i => i.macd),
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                    tension: 0.1
-                });
-            }
-            
-            // 检查是否有移动平均线指标
-            if (indicators[0].ma5 !== undefined) {
-                datasets.push({
-                    label: 'MA5',
-                    data: indicators.map(i => i.ma5),
-                    borderColor: 'rgb(54, 162, 235)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                    tension: 0.1
-                });
-            }
-            
-            if (indicators[0].ma10 !== undefined) {
-                datasets.push({
-                    label: 'MA10',
-                    data: indicators.map(i => i.ma10),
-                    borderColor: 'rgb(255, 159, 64)',
-                    backgroundColor: 'rgba(255, 159, 64, 0.1)',
-                    tension: 0.1
-                });
-            }
-            
-            if (indicators[0].ma20 !== undefined) {
-                datasets.push({
-                    label: 'MA20',
-                    data: indicators.map(i => i.ma20),
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                    tension: 0.1
-                });
-            }
-
-            // 如果没有技术指标，显示收盘价作为参考
-            if (datasets.length === 0 && indicators[0].close !== undefined) {
+            // 添加收盘价作为基准
+            if (indicators[0].close !== undefined) {
                 datasets.push({
                     label: '收盘价',
                     data: indicators.map(i => i.close),
-                    borderColor: 'rgb(153, 102, 255)',
-                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
-                    tension: 0.1
+                    borderColor: 'rgb(102, 126, 234)',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.1,
+                    yAxisID: 'y'
                 });
             }
+            
+            // 检查移动平均线指标
+            const maColors = {
+                'ma5': 'rgb(54, 162, 235)',
+                'ma10': 'rgb(255, 159, 64)',
+                'ma20': 'rgb(75, 192, 192)',
+                'ma50': 'rgb(153, 102, 255)'
+            };
+            
+            Object.keys(maColors).forEach(maKey => {
+                if (indicators[0][maKey] !== undefined) {
+                    datasets.push({
+                        label: maKey.toUpperCase(),
+                        data: indicators.map(i => i[maKey]),
+                        borderColor: maColors[maKey],
+                        backgroundColor: maColors[maKey].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    });
+                }
+            });
+            
+            // 检查RSI指标
+            if (indicators[0].rsi !== undefined) {
+                datasets.push({
+                    label: 'RSI',
+                    data: indicators.map(i => i.rsi),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    tension: 0.1,
+                    yAxisID: 'y1'
+                });
+            }
+
+            if (datasets.length === 0) return;
 
             new Chart(ctx, {
                 type: 'line',
@@ -562,6 +680,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
                     plugins: {
                         legend: {
                             display: true,
@@ -570,10 +692,22 @@
                     },
                     scales: {
                         y: {
-                            beginAtZero: false,
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
                             grid: {
                                 color: 'rgba(0,0,0,0.1)'
                             }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: indicators[0].rsi !== undefined,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            min: 0,
+                            max: 100
                         },
                         x: {
                             grid: {
@@ -583,67 +717,6 @@
                     }
                 }
             });
-        }
-
-        // 同步公司数据
-        async function syncCompanyData() {
-            const symbol = getSymbolFromUrl();
-            const loading = document.getElementById('loading');
-            
-            loading.style.display = 'block';
-            
-            try {
-                const response = await fetch(`/api/company/${symbol}/sync`, {
-                    method: 'POST'
-                });
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage('数据同步成功！正在刷新数据...', 'success');
-                    // 延迟后重新加载数据而不是刷新页面
-                    setTimeout(async () => {
-                        await reloadData();
-                        showMessage('数据已更新完成！', 'success');
-                    }, 1000);
-                } else {
-                    showMessage(result.message || '同步失败', 'error');
-                }
-            } catch (error) {
-                showMessage('网络错误: ' + error.message, 'error');
-            } finally {
-                loading.style.display = 'none';
-            }
-        }
-
-        // 重新加载数据
-        async function reloadData() {
-            const symbol = getSymbolFromUrl();
-            try {
-                await loadStockData(symbol);
-            } catch (error) {
-                console.error('重新加载数据失败:', error);
-                showMessage('数据更新失败，请手动刷新页面', 'error');
-            }
-        }
-
-        // 显示消息（居中提示）
-        function showMessage(text, type) {
-            const existingMessage = document.querySelector('.message-overlay');
-            if (existingMessage) {
-                existingMessage.remove();
-            }
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message-overlay ${type}`;
-            messageDiv.textContent = text;
-            document.body.appendChild(messageDiv);
-            
-            // 3秒后自动移除
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.remove();
-                }
-            }, 3000);
         }
 
         // 页面加载完成后初始化

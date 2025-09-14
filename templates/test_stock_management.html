@@ -592,10 +592,14 @@
 
         // 页面加载完成后自动加载股票数据
         document.addEventListener('DOMContentLoaded', function() {
-            // 加载行业列表
             loadIndustries();
-            // 页面初始化时加载20条股票数据
-            loadInitialStocks();
+            
+            // 从URL参数中获取页码
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentPage = parseInt(urlParams.get('page')) || 1;
+            
+            // 加载初始数据到指定页码
+            loadInitialStocks(currentPage);
         });
         
         // 加载行业列表
@@ -629,7 +633,7 @@
         }
 
         // 初始化加载股票数据
-        async function loadInitialStocks() {
+        async function loadInitialStocks(page = 1) {
             showLoading('searchResult');
             
             try {
@@ -637,30 +641,35 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    // 适配实际API格式：data直接是股票数组
-                    const stocks = result.data.slice(0, 20); // 取前20条
+                    const stocks = result.data;
+                    const pageSize = 20;
+                    const startIndex = (page - 1) * pageSize;
+                    const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
+                    
                     displaySearchResults({
-                        stocks: stocks,
+                        stocks: paginatedStocks,
                         pagination: {
-                            current_page: 1,
-                            total_pages: Math.ceil(result.data.length / 20),
-                            total_count: result.data.length
+                            current_page: page,
+                            total_pages: Math.ceil(stocks.length / pageSize),
+                            total_count: stocks.length
                         }
                     });
-                    console.log('初始化加载股票数据完成，共加载', stocks.length, '条记录');
+                    
+                    console.log(`已加载第 ${page} 页数据，共 ${stocks.length} 只股票`);
                 } else {
                     showError('searchResult', result.message);
                 }
             } catch (error) {
-                showError('searchResult', `加载股票数据失败: ${error.message}`);
+                showError('searchResult', `加载数据失败: ${error.message}`);
             }
         }
         
         // 表头排序功能
         async function sortTable(sortBy) {
             // 获取当前排序状态
-            const currentSortBy = new URLSearchParams(window.location.search).get('sort_by') || 'symbol';
-            const currentSortOrder = new URLSearchParams(window.location.search).get('sort_order') || 'ASC';
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentSortBy = urlParams.get('sort_by') || 'symbol';
+            const currentSortOrder = urlParams.get('sort_order') || 'ASC';
             
             // 确定新的排序顺序
             let newSortOrder = 'ASC';
@@ -668,9 +677,10 @@
                 newSortOrder = 'DESC';
             }
             
-            // 获取搜索参数
+            // 获取搜索参数和当前页码
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
+            const currentPage = parseInt(urlParams.get('page')) || 1;
             
             showLoading('searchResult');
             
@@ -713,27 +723,27 @@
                         }
                     });
                     
-                    // 分页
-                    const page = 1;
+                    // 分页 - 使用当前页码
                     const pageSize = 20;
-                    const startIndex = (page - 1) * pageSize;
+                    const startIndex = (currentPage - 1) * pageSize;
                     const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
                     
                     displaySearchResults({
                         stocks: paginatedStocks,
                         pagination: {
-                            current_page: page,
+                            current_page: currentPage,
                             total_pages: Math.ceil(stocks.length / pageSize),
                             total_count: stocks.length
                         }
                     });
                     
-                    // 更新URL以反映当前排序状态
+                    // 更新URL以反映当前排序状态和页码
                     const params = new URLSearchParams();
                     if (keyword) params.append('keyword', keyword);
                     if (industry) params.append('industry', industry);
                     params.append('sort_by', sortBy);
                     params.append('sort_order', newSortOrder);
+                    params.append('page', currentPage);
                     const newUrl = `${window.location.pathname}?${params.toString()}`;
                     window.history.replaceState({}, '', newUrl);
                 } else {
@@ -748,6 +758,10 @@
         async function searchStocks() {
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
+            
+            // 从URL参数中获取当前页码
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentPage = parseInt(urlParams.get('page')) || 1;
             
             showLoading('searchResult');
             
@@ -775,16 +789,15 @@
                     // 排序
                     stocks.sort((a, b) => a.symbol.localeCompare(b.symbol));
                     
-                    // 分页
-                    const page = 1;
+                    // 分页 - 使用当前页码
                     const pageSize = 20;
-                    const startIndex = (page - 1) * pageSize;
+                    const startIndex = (currentPage - 1) * pageSize;
                     const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
                     
                     displaySearchResults({
                         stocks: paginatedStocks,
                         pagination: {
-                            current_page: page,
+                            current_page: currentPage,
                             total_pages: Math.ceil(stocks.length / pageSize),
                             total_count: stocks.length
                         }
@@ -810,6 +823,10 @@
             const maxPeRatio = parseFloat(document.getElementById('maxPeRatio').value) || null;
             const minPbRatio = parseFloat(document.getElementById('minPbRatio').value) || null;
             const maxPbRatio = parseFloat(document.getElementById('maxPbRatio').value) || null;
+            
+            // 从URL参数中获取当前页码
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentPage = parseInt(urlParams.get('page')) || 1;
             
             showLoading('searchResult');
             closeAdvancedSearch(); // 关闭弹窗
@@ -864,16 +881,15 @@
                     // 排序
                     stocks.sort((a, b) => a.symbol.localeCompare(b.symbol));
                     
-                    // 分页
-                    const page = 1;
+                    // 分页 - 使用当前页码
                     const pageSize = 20;
-                    const startIndex = (page - 1) * pageSize;
+                    const startIndex = (currentPage - 1) * pageSize;
                     const paginatedStocks = stocks.slice(startIndex, startIndex + pageSize);
                     
                     displaySearchResults({
                         stocks: paginatedStocks,
                         pagination: {
-                            current_page: page,
+                            current_page: currentPage,
                             total_pages: Math.ceil(stocks.length / pageSize),
                             total_count: stocks.length
                         }
@@ -1132,9 +1148,14 @@
                         `✅ ${symbol} 同步完成！
 历史数据: ${result.data.history_count} 条`);
                     
-                    // 同步完成后刷新当前页面数据
+                    // 同步完成后刷新当前页面数据，保持当前页码
                     setTimeout(() => {
-                        searchStocks();
+                        // 从URL参数中获取当前页码
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const currentPage = parseInt(urlParams.get('page')) || 1;
+                        
+                        // 使用goToPage跳转到当前页码
+                        goToPage(currentPage);
                     }, 1000);
                 } else {
                     showCenterNotification('error', '同步失败', result.message);
@@ -1183,14 +1204,17 @@
             }
         }
         
-        async function syncStockHistory() {
-            const confirmMessage = `⚠️ 风险提示
+        async function syncStockHistory(symbol, name) {
+            const confirmMessage = `⚠️ 历史数据同步确认
 
-同步历史数据将执行以下操作：
-• 获取过去365天的完整历史数据
-• 包含开盘价、收盘价、最高价、最低价、成交量
-• 数据量较大，可能需要较长时间
+即将同步股票历史数据：${symbol} - ${name}
+
+同步范围：最近 365 天完整历史数据
+
+⚠️ 注意：
 • 会覆盖现有历史数据
+• 可能需要较长时间，请耐心等待
+• 同步过程中请勿关闭页面
 
 是否继续同步？`;
             
@@ -1198,45 +1222,57 @@
                 return;
             }
             
-            showCenterNotification('info', '数据同步', '正在同步历史数据...', true, 0, 100, '正在初始化');
+            showCenterNotification('info', '历史数据同步', `正在同步 ${symbol} 历史数据...`, true, 0, 100, '准备同步');
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/sync/history`, {
+                const response = await fetch(`${API_BASE}/stocks/sync/history/${symbol}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        days: 365,
-                        batch_size: 20,
-                        delay: 0.5
+                        days: 365
                     })
                 });
                 
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showCenterNotification('success', '同步完成', 
-                        `✅ 历史数据同步完成！
-总计: ${result.data.total}只股票
-成功: ${result.data.success}只
-失败: ${result.data.failed}只`);
+                    showCenterNotification('success', '历史数据同步完成', 
+                        `✅ ${symbol} 历史数据同步完成！
+同步数据: ${result.data.synced_count} 条
+时间范围: ${result.data.date_range}`);
+                    
+                    // 同步完成后刷新当前页面数据，保持当前页码
+                    setTimeout(() => {
+                        // 从URL参数中获取当前页码
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const currentPage = parseInt(urlParams.get('page')) || 1;
+                        
+                        // 使用goToPage跳转到当前页码
+                        goToPage(currentPage);
+                    }, 1500);
                 } else {
-                    showCenterNotification('error', '同步失败', result.message);
+                    showCenterNotification('error', '历史数据同步失败', result.message);
                 }
             } catch (error) {
-                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
+                showCenterNotification('error', '网络错误', `历史数据同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
             }
         }
         
-        async function syncStockLatest() {
-            const confirmMessage = `⚠️ 风险提示
+        async function syncStockLatest(symbol, name) {
+            const confirmMessage = `⚠️ 最新数据同步确认
 
-同步最新数据将执行以下操作：
-• 增量更新最近30天的股票数据
-• 只获取缺失的最新价格数据
-• 速度较快，通常几分钟完成
-• 仅更新价格数据，不影响股票基本信息
+即将同步最新数据：${symbol} - ${name}
+
+同步内容：
+• 最新价格数据
+• 今日交易数据
+• 实时市场数据
+
+⚠️ 注意：
+• 数据更新频率较高
+• 建议每天同步一次
 
 是否继续同步？`;
             
@@ -1244,34 +1280,37 @@
                 return;
             }
             
-            showCenterNotification('info', '数据同步', '正在同步最新数据...', true, 0, 100, '正在初始化');
+            showCenterNotification('info', '最新数据同步', `正在同步 ${symbol} 最新数据...`, true, 0, 100, '获取数据中');
             
             try {
-                const response = await fetch(`${API_BASE}/stocks/sync/latest`, {
+                const response = await fetch(`${API_BASE}/stocks/sync/latest/${symbol}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        days: 30,
-                        batch_size: 20,
-                        delay: 0.5
-                    })
+                    }
                 });
                 
                 const result = await response.json();
                 
                 if (result.code === 200) {
-                    showCenterNotification('success', '同步完成', 
-                        `✅ 最新数据同步完成！
-总计: ${result.data.total}只股票
-成功: ${result.data.success}只
-失败: ${result.data.failed}只`);
+                    showCenterNotification('success', '最新数据同步完成', 
+                        `✅ ${symbol} 最新数据同步完成！
+更新时间: ${result.data.update_time}`);
+                    
+                    // 同步完成后刷新当前页面数据，保持当前页码
+                    setTimeout(() => {
+                        // 从URL参数中获取当前页码
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const currentPage = parseInt(urlParams.get('page')) || 1;
+                        
+                        // 使用goToPage跳转到当前页码
+                        goToPage(currentPage);
+                    }, 1000);
                 } else {
-                    showCenterNotification('error', '同步失败', result.message);
+                    showCenterNotification('error', '最新数据同步失败', result.message);
                 }
             } catch (error) {
-                showCenterNotification('error', '网络错误', `同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
+                showCenterNotification('error', '网络错误', `最新数据同步失败: ${error.message || '网络连接异常，请检查网络后重试'}`);
             }
         }
         // 历史数据分析
