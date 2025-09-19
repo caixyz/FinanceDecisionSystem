@@ -1017,10 +1017,14 @@
                         结果总数: ${totalCount}
                     </div>
                     ${pagination.total_pages > 1 ? `
-                        <div class="pagination" style="margin: 0;">
+                        <div class="pagination" style="margin: 0; display: flex; align-items: center; gap: 1rem;">
                             <button class="btn" onclick="goToPage(${Math.max(1, pagination.current_page - 1)})" ${pagination.current_page === 1 ? 'disabled' : ''}>上一页</button>
                             <span class="page-info">第 ${pagination.current_page} 页，共 ${pagination.total_pages} 页</span>
                             <button class="btn" onclick="goToPage(${Math.min(pagination.total_pages, pagination.current_page + 1)})" ${pagination.current_page === pagination.total_pages ? 'disabled' : ''}>下一页</button>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="number" id="pageJumpInput" min="1" max="${pagination.total_pages}" value="${pagination.current_page}" style="width: 60px; padding: 0.3rem; text-align: center;">
+                                <button class="btn" onclick="jumpToSpecificPage()">跳转</button>
+                            </div>
                         </div>
                     ` : ''}
                 </div>
@@ -1030,6 +1034,11 @@
         }
         
         async function goToPage(page) {
+            const pageInput = document.getElementById('pageJumpInput');
+            if (pageInput) {
+                pageInput.value = page;
+            }
+            
             // 获取搜索参数
             const keyword = document.getElementById('searchKeyword').value.trim();
             const industry = document.getElementById('searchIndustry').value.trim();
@@ -1109,6 +1118,32 @@
             } catch (error) {
                 showError('searchResult', `分页失败: ${error.message}`);
             }
+        }
+        
+        // 跳转到指定页码
+        async function jumpToSpecificPage() {
+            const pageInput = document.getElementById('pageJumpInput');
+            if (!pageInput) return;
+            
+            let targetPage = parseInt(pageInput.value);
+            
+            if (isNaN(targetPage)) {
+                alert('请输入有效的页码');
+                return;
+            }
+            
+            // 获取总页数（从页面信息中提取）
+            const pageInfo = document.querySelector('.page-info');
+            if (pageInfo) {
+                const totalPagesMatch = pageInfo.textContent.match(/共(\d+)页/);
+                if (totalPagesMatch && totalPagesMatch[1]) {
+                    const totalPages = parseInt(totalPagesMatch[1]);
+                    targetPage = Math.max(1, Math.min(totalPages, targetPage));
+                    pageInput.value = targetPage;
+                }
+            }
+            
+            await goToPage(targetPage);
         }
 
         // 数据同步功能
@@ -1372,10 +1407,16 @@
             overlay.style.display = 'none';
         }
 
-        // 点击遮罩关闭通知
-        document.getElementById('notificationOverlay').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeCenterNotification();
+        // 确保DOM加载完成后再绑定事件
+        document.addEventListener('DOMContentLoaded', function() {
+            // 点击遮罩关闭通知
+            const overlay = document.getElementById('notificationOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeCenterNotification();
+                    }
+                });
             }
         });
     </script>
